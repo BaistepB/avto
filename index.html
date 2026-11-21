@@ -81,7 +81,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useCallback, useRef } = React;
+        const { useState, useEffect, useCallback, useRef, useMemo } = React;
 
         /* ═══════════════════════════════════════════════════
            1. КОНСТАНТЫ
@@ -619,6 +619,22 @@
                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
                  strokeLinejoin="round" className={className}>
                 <polyline points="9 18 15 12 9 6"/>
+            </svg>
+        );
+
+        const IconChevronDown = ({ size = 16, className = '' }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                 strokeLinejoin="round" className={className}>
+                <polyline points="6 9 12 15 18 9"/>
+            </svg>
+        );
+
+        const IconChevronUp = ({ size = 16, className = '' }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                 strokeLinejoin="round" className={className}>
+                <polyline points="18 15 12 9 6 15"/>
             </svg>
         );
 
@@ -2103,9 +2119,21 @@
         /* ═══════════════════════════════════════════════════
            9. КОМПОНЕНТ: ЭКРАН АВТОПОДБОРА
         ═══════════════════════════════════════════════════ */
-        const AutoSelectScreen = ({ monthData, profile, t }) => {
+        const AutoSelectScreen = ({
+            monthData,
+            profile,
+            addresses = [],
+            onUpdateAddresses,
+            onSaveAddressesCloud,
+            allMonths = {},
+            onApplyDistribution,
+            cloudStatus,
+            userPhone,
+            t
+        }) => {
             const year  = monthData.year;
             const month = monthData.month;
+            const totalDays = daysInMonth(year, month);
             const activeSeason = monthData.seasonOverride || getSeason(year, month);
             const activeNorm   = activeSeason === 'summer'
                 ? (Number(profile.normSummer) || 0)
@@ -2123,7 +2151,9 @@
             const requiredFuel   = fuelStart + totalRefuels - target;
             const requiredKm     = activeNorm > 0 ? (requiredFuel / activeNorm * 100) : 0;
             const missingKm      = Math.max(0, requiredKm - kmFromRoutes);
+            const targetTotal    = Math.round(missingKm);
 
+            /* ── Стили текущей темы оформления ── */
             const accentClass = t(
                 'text-[#FFB300]','text-amber-700','text-pink-600',
                 'text-blue-600','text-emerald-700','text-[#5D4037]','text-[#9A1B24]'
@@ -2138,21 +2168,314 @@
                 'bg-gray-50 border-gray-200'
             );
             const inputSm = t(
-                'bg-[#282B30] border-gray-700 text-white',
-                'bg-white border-gray-300 text-gray-900',
-                'bg-pink-50 border-pink-200 text-pink-900',
-                'bg-blue-50 border-blue-200 text-blue-900',
-                'bg-emerald-50 border-emerald-200 text-emerald-900',
-                'bg-[#EFEBE9] border-[#D7CCC8] text-[#3E2723]',
-                'bg-white border-gray-300 text-gray-900'
+                'bg-[#282B30] border-gray-700 text-white placeholder-gray-500',
+                'bg-white border-gray-300 text-gray-900 placeholder-gray-400',
+                'bg-pink-50 border-pink-200 text-pink-900 placeholder-pink-400',
+                'bg-blue-50 border-blue-200 text-blue-900 placeholder-blue-400',
+                'bg-emerald-50 border-emerald-200 text-emerald-900 placeholder-emerald-400',
+                'bg-[#EFEBE9] border-[#D7CCC8] text-[#3E2723] placeholder-[#A1887F]',
+                'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+            );
+            const btnPrimary = t(
+                'bg-[#FFB300] text-black hover:bg-[#FFA000]',
+                'bg-amber-600 text-white hover:bg-amber-700',
+                'bg-pink-500 text-white hover:bg-pink-600',
+                'bg-blue-600 text-white hover:bg-blue-700',
+                'bg-emerald-600 text-white hover:bg-emerald-700',
+                'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
+                'bg-[#C62828] text-white hover:bg-[#B71C1C]'
+            );
+            const btnSecondary = t(
+                'bg-[#282B30] text-gray-300 hover:bg-[#32363C] border border-gray-700',
+                'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300',
+                'bg-pink-100 text-pink-800 hover:bg-pink-200 border border-pink-300',
+                'bg-blue-100 text-blue-800 hover:bg-blue-200 border border-blue-300',
+                'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300',
+                'bg-[#EFEBE9] text-[#4E342E] hover:bg-[#D7CCC8] border border-[#BCAAA4]',
+                'bg-gray-100 text-gray-800 hover:bg-gray-200 border border-gray-300'
+            );
+            const listRowHover = t(
+                'hover:bg-[#282B30] border-gray-800',
+                'hover:bg-gray-100 border-gray-200',
+                'hover:bg-pink-100 border-pink-200',
+                'hover:bg-blue-100 border-blue-200',
+                'hover:bg-emerald-100 border-emerald-200',
+                'hover:bg-[#EFEBE9] border-[#D7CCC8]',
+                'hover:bg-gray-100 border-gray-200'
             );
 
+            /* ── Состояния справочника адресов ── */
+            const [isAddressesOpen, setIsAddressesOpen] = useState(false);
+            const [newAddr, setNewAddr] = useState('');
+            const [newNote, setNewNote] = useState('');
+            const [isBulkAdd, setIsBulkAdd] = useState(false);
+            const [bulkText, setBulkText] = useState('');
+
+            /* ── Состояния распределения пробега ── */
+            const [selectedDays, setSelectedDays] = useState({});
+            const [minKm, setMinKm] = useState(70);
+            const [maxKm, setMaxKm] = useState(160);
+            const [distributionMap, setDistributionMap] = useState(null);
+
+            /* ── Дни с заправками (обязательные) ── */
+            const refuelDates = useMemo(() => {
+                const s = new Set();
+                (monthData.refuels || []).forEach(r => {
+                    if (r.date) s.add(r.date);
+                });
+                return s;
+            }, [monthData.refuels]);
+
+            /* ── Итоговый список выбранных дней ── */
+            const selectedKeys = useMemo(() => {
+                const list = [];
+                for (let d = 1; d <= totalDays; d++) {
+                    const key = toDateStr(year, month, d);
+                    if (refuelDates.has(key) || selectedDays[key]) {
+                        list.push(key);
+                    }
+                }
+                return list;
+            }, [totalDays, year, month, refuelDates, selectedDays]);
+
+            /* ── Переключение дня ── */
+            const toggleDay = (dateKey) => {
+                if (refuelDates.has(dateKey)) return;
+                setSelectedDays(prev => {
+                    const next = { ...prev };
+                    if (next[dateKey]) delete next[dateKey];
+                    else next[dateKey] = true;
+                    return next;
+                });
+                setDistributionMap(null);
+            };
+
+            /* ── Автовыбор оптимального количества дней ── */
+            const handleAutoSelectDays = () => {
+                if (targetTotal <= 0) {
+                    alert('Недостающий пробег равен 0 км.');
+                    return;
+                }
+                const lo = Math.max(1, Number(minKm) || 70);
+                const hi = Math.max(lo, Number(maxKm) || 160);
+                const avg = (lo + hi) / 2;
+                const optimalCount = Math.min(totalDays, Math.max(1, Math.ceil(targetTotal / avg)));
+
+                const newSelected = {};
+                refuelDates.forEach(k => { newSelected[k] = true; });
+
+                let currentCount = Object.keys(newSelected).length;
+                if (currentCount < optimalCount) {
+                    const available = [];
+                    for (let d = 1; d <= totalDays; d++) {
+                        const k = toDateStr(year, month, d);
+                        if (!newSelected[k]) available.push(k);
+                    }
+
+                    const needed = optimalCount - currentCount;
+                    if (needed > 0 && available.length > 0) {
+                        const step = available.length / needed;
+                        for (let i = 0; i < needed; i++) {
+                            const idx = Math.min(available.length - 1, Math.floor(i * step));
+                            newSelected[available[idx]] = true;
+                        }
+                    }
+                }
+
+                setSelectedDays(newSelected);
+                setDistributionMap(null);
+            };
+
+            /* ── Алгоритм распределения пробега ── */
+            const generateDistribution = () => {
+                if (targetTotal <= 0) {
+                    alert('Недостающий пробег равен 0 км.');
+                    return;
+                }
+                if (selectedKeys.length === 0) {
+                    alert('Выберите хотя бы один день для распределения пробега.');
+                    return;
+                }
+
+                const lo = Math.max(1, Number(minKm) || 70);
+                const hi = Math.max(lo, Number(maxKm) || 160);
+
+                const randoms = selectedKeys.map(() => lo + Math.random() * (hi - lo));
+                const sumR = randoms.reduce((a, b) => a + b, 0);
+
+                const alloc = randoms.map(r => Math.round((r * targetTotal) / sumR));
+
+                if (targetTotal >= selectedKeys.length) {
+                    for (let i = 0; i < alloc.length; i++) {
+                        if (alloc[i] < 1) alloc[i] = 1;
+                    }
+                }
+
+                let currentSum = alloc.reduce((a, b) => a + b, 0);
+                let delta = targetTotal - currentSum;
+
+                // Доводка невязки по ±1 км с гарантией сохранения положительного пробега
+                let loopSafety = 0;
+                while (delta !== 0 && loopSafety < 10000) {
+                    loopSafety++;
+                    if (delta > 0) {
+                        const idx = Math.floor(Math.random() * alloc.length);
+                        alloc[idx] += 1;
+                        delta -= 1;
+                    } else {
+                        const eligibleIndices = [];
+                        for (let i = 0; i < alloc.length; i++) {
+                            if (alloc[i] > 1) eligibleIndices.push(i);
+                        }
+                        if (eligibleIndices.length === 0) break;
+                        const chosenIdx = eligibleIndices[Math.floor(Math.random() * eligibleIndices.length)];
+                        alloc[chosenIdx] -= 1;
+                        delta += 1;
+                    }
+                }
+
+                const map = {};
+                selectedKeys.forEach((key, idx) => {
+                    map[key] = alloc[idx];
+                });
+                setDistributionMap(map);
+            };
+
+            /* ── Применение распределения (Страховка 1: мгновенный сброс предпросмотра) ── */
+            const handleApply = () => {
+                if (!distributionMap) return;
+                const mapToApply = distributionMap;
+                setDistributionMap(null);
+                onApplyDistribution(mapToApply);
+            };
+
+            /* ── Добавление одного адреса в справочник ── */
+            const handleAddAddress = () => {
+                const trimmedAddr = newAddr.trim();
+                const trimmedNote = newNote.trim();
+                if (!trimmedAddr) return;
+
+                const cleanStart = (profile.startPoint || '').toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
+                const cleanInput = trimmedAddr.toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
+                if (cleanStart && cleanInput === cleanStart) {
+                    alert('Этот адрес совпадает с вашей точкой старта. В личный справочник добавляются только точки поездок.');
+                    return;
+                }
+
+                const exists = addresses.some(a => (a.address || '').trim().toLowerCase() === trimmedAddr.toLowerCase());
+                if (exists) {
+                    alert('Такой адрес уже есть в справочнике.');
+                    return;
+                }
+
+                const updated = [...addresses, { address: trimmedAddr, note: trimmedNote }];
+                onUpdateAddresses(updated, true);
+                setNewAddr('');
+                setNewNote('');
+            };
+
+            /* ── Массовая вставка адресов ── */
+            const handleBulkAdd = () => {
+                if (!bulkText.trim()) return;
+                const lines = bulkText.split('\n');
+                const cleanStart = (profile.startPoint || '').toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
+                const existingSet = new Set(addresses.map(a => (a.address || '').trim().toLowerCase()));
+
+                const addedList = [];
+                const seenInBatch = new Set();
+
+                lines.forEach(rawLine => {
+                    const trimmed = rawLine.trim();
+                    if (!trimmed) return;
+                    const clean = trimmed.toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
+                    if (cleanStart && clean === cleanStart) return;
+                    const low = trimmed.toLowerCase();
+                    if (existingSet.has(low) || seenInBatch.has(low)) return;
+
+                    seenInBatch.add(low);
+                    addedList.push({ address: trimmed, note: '' });
+                });
+
+                if (addedList.length === 0) {
+                    alert('Новых адресов не найдено (все адреса пустые, уже есть в справочнике или совпадают с точкой старта).');
+                    return;
+                }
+
+                const updated = [...addresses, ...addedList];
+                onUpdateAddresses(updated, true);
+                setBulkText('');
+                setIsBulkAdd(false);
+                alert(`Добавлено новых адресов: ${addedList.length}`);
+            };
+
+            /* ── Пополнение из всех загруженных Маршрутов ── */
+            const handleImportFromRoutes = () => {
+                const cleanStart = (profile.startPoint || '').toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
+                const existingSet = new Set(addresses.map(a => (a.address || '').trim().toLowerCase()));
+                const collected = [];
+                const seen = new Set();
+
+                Object.values(allMonths || {}).forEach(m => {
+                    if (!m || !m.workdays) return;
+                    Object.values(m.workdays).forEach(day => {
+                        if (!day || !Array.isArray(day.trips)) return;
+                        day.trips.forEach(trip => {
+                            const rawAddr = (trip.address || '').trim();
+                            if (!rawAddr) return;
+                            const clean = rawAddr.toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
+                            if (cleanStart && clean === cleanStart) return;
+                            const low = rawAddr.toLowerCase();
+                            if (existingSet.has(low) || seen.has(low)) return;
+
+                            seen.add(low);
+                            collected.push({
+                                address: rawAddr,
+                                note: trip.taskType || trip.time ? [trip.taskType, trip.time].filter(Boolean).join(', ') : ''
+                            });
+                        });
+                    });
+                });
+
+                if (collected.length === 0) {
+                    alert('В загруженных маршрутах не найдено новых адресов для добавления.');
+                    return;
+                }
+
+                const updated = [...addresses, ...collected];
+                onUpdateAddresses(updated, true);
+                alert(`Успешно добавлено ${collected.length} новых адресов из маршрутов!`);
+            };
+
+            /* ── Удаление адреса ── */
+            const handleDeleteAddress = (idx) => {
+                const updated = addresses.filter((_, i) => i !== idx);
+                onUpdateAddresses(updated, true);
+            };
+
+            /* ── Подсказка по диапазону дней ── */
+            const selectedCount = selectedKeys.length;
+            const loVal = Math.max(1, Number(minKm) || 70);
+            const hiVal = Math.max(loVal, Number(maxKm) || 160);
+            const minPossible = selectedCount * loVal;
+            const maxPossible = selectedCount * hiVal;
+            const recMinDays = Math.max(1, Math.ceil(targetTotal / hiVal));
+            const recMaxDays = Math.max(1, Math.floor(targetTotal / loVal));
+            let rangeHint = null;
+            if (targetTotal > 0 && selectedCount > 0) {
+                if (targetTotal < minPossible) {
+                    rangeHint = `Выбрано много дней (${selectedCount}) для ${targetTotal} км при мин. ${loVal} км/д. Рекомендуется ${recMinDays}–${recMaxDays} дн.`;
+                } else if (targetTotal > maxPossible) {
+                    rangeHint = `Выбрано мало дней (${selectedCount}) для ${targetTotal} км при макс. ${hiVal} км/д. Рекомендуется ${recMinDays}–${recMaxDays} дн.`;
+                }
+            }
+
             return (
-                <div className="max-w-3xl mx-auto w-full space-y-4 animate-fade-in">
-                    <div className={`rounded-lg border p-3 ${cardClass}`}>
+                <div className="max-w-3xl mx-auto w-full space-y-4 animate-fade-in pb-8">
+                    {/* КАРТОЧКА 1: РАСЧЁТ ЦЕЛЕВОГО ТОПЛИВА И ПРОБЕГА */}
+                    <div className={`rounded-lg border p-4 ${cardClass}`}>
                         <p className={`text-xs font-bold mb-1 ${accentClass}`}>АВТОПОДБОР ПРОБЕГА</p>
                         <p className="text-xs opacity-50 mb-3">
-                            Введите целевой остаток топлива на конец месяца — система рассчитает нужный пробег.
+                            Введите целевой остаток топлива на конец месяца — система рассчитает требуемый расход и недостающий километраж.
                         </p>
 
                         <div className="mb-3">
@@ -2163,7 +2486,10 @@
                                 className={`w-full p-2 text-[16px] sm:text-sm rounded border ${inputSm}`}
                                 placeholder="Например: 10.000"
                                 value={targetFuel}
-                                onChange={e => setTargetFuel(e.target.value)}
+                                onChange={e => {
+                                    setTargetFuel(e.target.value);
+                                    setDistributionMap(null);
+                                }}
                                 onBlur={() => {
                                     if (targetFuel.trim() !== '') {
                                         const v = parseFuelInput(targetFuel);
@@ -2186,74 +2512,377 @@
                                 <span className="opacity-60">Целевой остаток:</span>
                                 <span className="font-mono font-bold">−{formatFuel(target)} л</span>
                             </div>
-                            <div className={`flex justify-between font-bold pt-1 border-t ${t('border-gray-700','border-gray-200','border-pink-200','border-blue-200','border-emerald-200','border-[#D7CCC8]','border-gray-200')}`}>
+                            <div className={`flex justify-between font-bold pt-2 border-t ${t('border-gray-700','border-gray-200','border-pink-200','border-blue-200','border-emerald-200','border-[#D7CCC8]','border-gray-200')}`}>
                                 <span className={accentClass}>Требуемый расход:</span>
                                 <span className={`font-mono ${accentClass}`}>{formatFuel(requiredFuel)} л</span>
                             </div>
                             <div className={`flex justify-between font-bold ${accentClass}`}>
-                                <span>Требуемый пробег:</span>
+                                <span>Требуемый пробег (норма {activeNorm} л/100км):</span>
                                 <span className="font-mono">{requiredKm.toFixed(1)} км</span>
                             </div>
                             <div className="flex justify-between opacity-70">
                                 <span>Пробег из маршрутов:</span>
                                 <span className="font-mono">{kmFromRoutes.toFixed(1)} км</span>
                             </div>
-                            <div className={`flex justify-between font-bold pt-1 border-t ${t('border-gray-700','border-gray-200','border-pink-200','border-blue-200','border-emerald-200','border-[#D7CCC8]','border-gray-200')}`}>
+                            <div className={`flex justify-between font-bold pt-2 border-t ${t('border-gray-700','border-gray-200','border-pink-200','border-blue-200','border-emerald-200','border-[#D7CCC8]','border-gray-200')}`}>
                                 <span className={missingKm > 0 ? 'text-orange-500' : 'text-green-500'}>
                                     {missingKm > 0 ? '⚠ Недостающий пробег:' : '✓ Маршрутов достаточно:'}
                                 </span>
-                                <span className={`font-mono ${missingKm > 0 ? 'text-orange-500' : 'text-green-500'}`}>
-                                    {missingKm > 0 ? `${missingKm.toFixed(1)} км` : '0 км'}
+                                <span className={`font-mono text-base ${missingKm > 0 ? 'text-orange-500' : 'text-green-500'}`}>
+                                    {missingKm > 0 ? `${missingKm.toFixed(1)} км (округлённо ${targetTotal} км)` : '0 км'}
                                 </span>
                             </div>
                         </div>
                     </div>
 
-                    {/* Выбор дней */}
-                    {missingKm > 0 && workdayKeys.length > 0 && (
-                        <div className={`rounded-lg border p-3 ${cardClass}`}>
-                            <p className={`text-xs font-bold mb-2 ${accentClass}`}>
-                                РАСПРЕДЕЛЕНИЕ НЕДОСТАЮЩЕГО ПРОБЕГА
-                            </p>
-                            <p className="text-xs opacity-50 mb-2">
-                                Выберите дни для добавления пробега. Дни с заправками — обязательны.
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                                {workdayKeys.map(dateKey => {
-                                    const { day: d } = parseDate(dateKey);
-                                    const hasRefuel = (monthData.refuels || []).some(r => r.date === dateKey);
-                                    return (
-                                        <div
-                                            key={dateKey}
-                                            className={`w-9 h-9 rounded flex items-center justify-center text-sm font-bold border ${
-                                                hasRefuel
-                                                    ? t('bg-[#FFB300] text-black border-[#FFB300]','bg-amber-500 text-white border-amber-500','bg-pink-500 text-white border-pink-500','bg-blue-600 text-white border-blue-600','bg-emerald-600 text-white border-emerald-600','bg-[#6D4C41] text-white border-[#6D4C41]','bg-[#C62828] text-white border-[#C62828]')
-                                                    : t('border-gray-600 text-gray-400','border-gray-300 text-gray-500','border-pink-200 text-pink-400','border-blue-200 text-blue-400','border-emerald-200 text-emerald-500','border-[#D7CCC8] text-[#A1887F]','border-gray-300 text-gray-500')
-                                            }`}
-                                            title={hasRefuel ? 'День с заправкой' : ''}
-                                        >
-                                            {d}
-                                        </div>
-                                    );
-                                })}
+                    {/* КАРТОЧКА 2: ЛИЧНЫЙ СПРАВОЧНИК АДРЕСОВ (СВОРАЧИВАЕМАЯ) */}
+                    <div className={`rounded-lg border ${cardClass} overflow-hidden`}>
+                        <div
+                            onClick={() => setIsAddressesOpen(!isAddressesOpen)}
+                            className="p-3 flex items-center justify-between cursor-pointer select-none transition-opacity hover:opacity-90"
+                        >
+                            <div className="flex items-center gap-2">
+                                <IconMapPin size={18} className={accentClass} />
+                                <span className="text-xs font-bold uppercase tracking-wider">
+                                    Личный справочник адресов ({addresses.length})
+                                </span>
                             </div>
+                            <div className="flex items-center gap-2">
+                                {cloudStatus === 'syncing' && <span className="text-[10px] text-blue-400">Синхронизация...</span>}
+                                {cloudStatus === 'saved' && <span className="text-[10px] text-emerald-400">Облако ✓</span>}
+                                {isAddressesOpen ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
+                            </div>
+                        </div>
+
+                        {isAddressesOpen && (
+                            <div className={`p-4 border-t space-y-4 ${t('border-gray-800','border-gray-200','border-pink-200','border-blue-200','border-emerald-200','border-[#D7CCC8]','border-gray-200')}`}>
+                                <p className="text-xs opacity-60">
+                                    Адреса используются для генерации реалистичных промежуточных точек в путевых листах. Стартовая точка ({profile.startPoint || 'не задана'}) не дублируется.
+                                </p>
+
+                                {/* Панель кнопок действий */}
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsBulkAdd(!isBulkAdd)}
+                                        className={`px-3 py-1.5 rounded text-xs font-semibold ${btnSecondary}`}
+                                    >
+                                        {isBulkAdd ? '✕ Закрыть списочную вставку' : '📋 Вставить списком'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleImportFromRoutes}
+                                        className={`px-3 py-1.5 rounded text-xs font-semibold ${btnSecondary}`}
+                                        title="Собрать все уникальные адреса из всех загруженных месяцев"
+                                    >
+                                        🔄 Пополнить из загруженных Маршрутов
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={onSaveAddressesCloud}
+                                        className={`px-3 py-1.5 rounded text-xs font-semibold ${btnSecondary}`}
+                                        title="Принудительно сохранить справочник в Google Таблицу"
+                                    >
+                                        ☁ Сохранить справочник в таблицу
+                                    </button>
+                                </div>
+
+                                {/* Массовая вставка через textarea */}
+                                {isBulkAdd && (
+                                    <div className="space-y-2 p-3 rounded border border-dashed border-gray-500">
+                                        <label className="block text-xs font-medium opacity-80">
+                                            Вставьте адреса (каждый адрес с новой строки):
+                                        </label>
+                                        <textarea
+                                            rows={4}
+                                            value={bulkText}
+                                            onChange={e => setBulkText(e.target.value)}
+                                            placeholder="г. Москва, ул. Тверская, д. 1&#10;г. Москва, пр-т Мира, д. 10&#10;МО, г. Мытищи, ул. Ленина, д. 5"
+                                            className={`w-full p-2 text-[16px] sm:text-sm rounded border ${inputSm}`}
+                                        />
+                                        <div className="flex justify-end gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => { setIsBulkAdd(false); setBulkText(''); }}
+                                                className="px-3 py-1.5 rounded text-xs opacity-60 hover:opacity-100"
+                                            >
+                                                Отмена
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleBulkAdd}
+                                                className={`px-4 py-1.5 rounded text-xs font-bold ${btnPrimary}`}
+                                            >
+                                                Добавить все
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Форма ручного добавления одного адреса */}
+                                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+                                    <div className="sm:col-span-6">
+                                        <label className="block text-xs opacity-60 mb-1">Адрес точки</label>
+                                        <input
+                                            type="text"
+                                            value={newAddr}
+                                            onChange={e => setNewAddr(e.target.value)}
+                                            onKeyDown={e => { if (e.key === 'Enter') handleAddAddress(); }}
+                                            placeholder="г. Москва, ул. Примерная, д. 10"
+                                            className={`w-full p-2 text-[16px] sm:text-sm rounded border ${inputSm}`}
+                                        />
+                                    </div>
+                                    <div className="sm:col-span-4">
+                                        <label className="block text-xs opacity-60 mb-1">Заметка (необязательно)</label>
+                                        <input
+                                            type="text"
+                                            value={newNote}
+                                            onChange={e => setNewNote(e.target.value)}
+                                            onKeyDown={e => { if (e.key === 'Enter') handleAddAddress(); }}
+                                            placeholder="Офис / Клиент"
+                                            className={`w-full p-2 text-[16px] sm:text-sm rounded border ${inputSm}`}
+                                        />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleAddAddress}
+                                            className={`w-full min-h-[40px] flex items-center justify-center gap-1 rounded text-xs font-bold ${btnPrimary}`}
+                                        >
+                                            <IconPlus size={16} />
+                                            Добавить
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Список адресов */}
+                                <div className="space-y-1">
+                                    <div className="text-xs font-semibold opacity-70 mb-1 flex justify-between">
+                                        <span>Список сохранённых адресов:</span>
+                                        <span>{addresses.length} шт.</span>
+                                    </div>
+                                    {addresses.length === 0 ? (
+                                        <p className="text-xs opacity-40 italic py-2">Справочник пока пуст. Добавьте адреса вручную или пополните из маршрутов.</p>
+                                    ) : (
+                                        <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
+                                            {addresses.map((item, idx) => (
+                                                <div
+                                                    key={idx}
+                                                    className={`flex items-center justify-between gap-2 p-2 rounded text-xs border ${listRowHover}`}
+                                                >
+                                                    <div className="min-w-0 flex-1 flex items-center gap-2">
+                                                        <span className="opacity-40 font-mono text-[11px] w-5 text-right">{idx + 1}.</span>
+                                                        <span className="truncate font-medium">{item.address}</span>
+                                                        {item.note && (
+                                                            <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded opacity-75 bg-black/10 dark:bg-white/10">
+                                                                {item.note}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeleteAddress(idx)}
+                                                        className="text-red-400 hover:text-red-600 p-1 rounded"
+                                                        title="Удалить адрес"
+                                                    >
+                                                        <IconTrash size={14} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* КАРТОЧКА 3: РАСПРЕДЕЛЕНИЕ НЕДОСТАЮЩЕГО ПРОБЕГА */}
+                    {missingKm > 0 && (
+                        <div className={`rounded-lg border p-4 space-y-4 ${cardClass}`}>
+                            <div>
+                                <p className={`text-xs font-bold mb-1 ${accentClass}`}>
+                                    РАСПРЕДЕЛЕНИЕ НЕДОСТАЮЩЕГО ПРОБЕГА ({targetTotal} КМ)
+                                </p>
+                                <p className="text-xs opacity-50">
+                                    Выберите рабочие дни для распределения километража. Дни с заправками выделены и зафиксированы автоматически.
+                                </p>
+                            </div>
+
+                            {/* Сетка дней месяца */}
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs font-semibold opacity-70">
+                                        Календарь дней ({selectedKeys.length} выбрано из {totalDays}):
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={handleAutoSelectDays}
+                                        className={`px-3 py-1 rounded text-xs font-semibold ${btnSecondary}`}
+                                    >
+                                        🎲 Выбрать дни автоматически
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-7 sm:grid-cols-10 gap-1.5">
+                                    {Array.from({ length: totalDays }, (_, i) => i + 1).map(d => {
+                                        const dateKey = toDateStr(year, month, d);
+                                        const hasRefuel = refuelDates.has(dateKey);
+                                        const isSel = hasRefuel || !!selectedDays[dateKey];
+                                        const dayObj = workdays[dateKey];
+                                        const hasKm = (Number(dayObj?.tripKm) || 0) > 0;
+                                        const hasTrips = (dayObj?.trips || []).length > 0;
+
+                                        return (
+                                            <button
+                                                key={dateKey}
+                                                type="button"
+                                                onClick={() => toggleDay(dateKey)}
+                                                disabled={hasRefuel}
+                                                className={`relative h-11 rounded flex flex-col items-center justify-center text-xs font-bold border transition-colors ${
+                                                    hasRefuel
+                                                        ? 'bg-amber-500 text-black border-amber-400 font-extrabold ring-1 ring-amber-300 cursor-not-allowed'
+                                                        : isSel
+                                                            ? t('bg-[#FFB300] text-black border-[#FFB300]','bg-amber-600 text-white border-amber-600','bg-pink-500 text-white border-pink-500','bg-blue-600 text-white border-blue-600','bg-emerald-600 text-white border-emerald-600','bg-[#6D4C41] text-white border-[#6D4C41]','bg-[#C62828] text-white border-[#C62828]')
+                                                            : t('border-gray-700 text-gray-400 hover:border-gray-500','border-gray-200 text-gray-500 hover:border-gray-400','border-pink-200 text-pink-400 hover:border-pink-300','border-blue-200 text-blue-400 hover:border-blue-300','border-emerald-200 text-emerald-500 hover:border-emerald-300','border-[#D7CCC8] text-[#A1887F] hover:border-[#BCAAA4]','border-gray-200 text-gray-500 hover:border-gray-400')
+                                                }`}
+                                                title={hasRefuel ? `День ${d}: Заправка — обязательный рабочий день` : `День ${d}: ${isSel ? 'Выбран' : 'Не выбран'}`}
+                                            >
+                                                <span>{d}</span>
+                                                <div className="flex gap-0.5 mt-0.5">
+                                                    {hasRefuel && <span className="w-1.5 h-1.5 rounded-full bg-red-600" title="Заправка" />}
+                                                    {(hasKm || hasTrips) && <span className={`w-1.5 h-1.5 rounded-full ${isSel ? 'bg-black/60 dark:bg-white/70' : 'bg-blue-400'}`} title="Есть поездки" />}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Параметры разброса */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                                <div>
+                                    <label className="block text-xs opacity-60 mb-1">Мин. км в день</label>
+                                    <input
+                                        type="number"
+                                        min="10"
+                                        max="500"
+                                        value={minKm}
+                                        onChange={e => {
+                                            setMinKm(Number(e.target.value) || 0);
+                                            setDistributionMap(null);
+                                        }}
+                                        className={`w-full p-2 text-[16px] sm:text-sm rounded border ${inputSm}`}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs opacity-60 mb-1">Макс. км в день</label>
+                                    <input
+                                        type="number"
+                                        min="10"
+                                        max="500"
+                                        value={maxKm}
+                                        onChange={e => {
+                                            setMaxKm(Number(e.target.value) || 0);
+                                            setDistributionMap(null);
+                                        }}
+                                        className={`w-full p-2 text-[16px] sm:text-sm rounded border ${inputSm}`}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Мягкая подсказка по балансу дней */}
+                            {rangeHint && (
+                                <div className="p-2.5 rounded text-xs bg-amber-500/10 border border-amber-500/30 text-amber-500 flex items-center gap-2">
+                                    <IconAlertTriangle size={16} className="flex-shrink-0" />
+                                    <span>{rangeHint}</span>
+                                </div>
+                            )}
+
+                            {/* Кнопка генерации распределения */}
+                            <button
+                                type="button"
+                                onClick={generateDistribution}
+                                className={`w-full min-h-[44px] flex items-center justify-center gap-2 rounded text-sm font-bold ${btnPrimary}`}
+                            >
+                                <IconRefresh size={16} />
+                                {distributionMap ? 'Пересчитать разброс 🎲' : 'Раскидать пробег по выбранным дням'}
+                            </button>
+
+                            {/* ТАБЛИЦА ПРЕДПРОСМОТРА РАСПРЕДЕЛЕНИЯ */}
+                            {distributionMap && (
+                                <div className="space-y-3 pt-2">
+                                    <div className="text-xs font-bold uppercase tracking-wider opacity-70">
+                                        Предпросмотр распределения ({Object.keys(distributionMap).length} дн.):
+                                    </div>
+                                    <div className="overflow-x-auto rounded border border-gray-700/40">
+                                        <table className="w-full text-xs text-left">
+                                            <thead>
+                                                <tr className={`border-b ${t('bg-[#282B30] border-gray-700 text-gray-300','bg-gray-100 border-gray-200 text-gray-700','bg-pink-100 border-pink-200 text-pink-900','bg-blue-100 border-blue-200 text-blue-900','bg-emerald-100 border-emerald-200 text-emerald-900','bg-[#EFEBE9] border-[#D7CCC8] text-[#3E2723]','bg-gray-100 border-gray-200 text-gray-700')}`}>
+                                                    <th className="p-2">Дата</th>
+                                                    <th className="p-2 text-right">Было км</th>
+                                                    <th className="p-2 text-right font-bold text-amber-500">+Добавлено</th>
+                                                    <th className="p-2 text-right font-bold">Итого км</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-700/30">
+                                                {Object.keys(distributionMap).sort().map(key => {
+                                                    const curKm = Number(workdays[key]?.tripKm) || 0;
+                                                    const addKm = Number(distributionMap[key]) || 0;
+                                                    const totalDayKm = Math.round((curKm + addKm) * 10) / 10;
+                                                    return (
+                                                        <tr key={key} className={listRowHover}>
+                                                            <td className="p-2 font-mono font-medium">{key}</td>
+                                                            <td className="p-2 text-right font-mono opacity-60">{curKm.toFixed(1)}</td>
+                                                            <td className="p-2 text-right font-mono font-bold text-amber-500">+{addKm}</td>
+                                                            <td className="p-2 text-right font-mono font-bold">{totalDayKm.toFixed(1)}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                                <tr className={`font-bold border-t-2 ${t('bg-[#282B30] border-gray-600','bg-gray-100 border-gray-300','bg-pink-100 border-pink-300','bg-blue-100 border-blue-300','bg-emerald-100 border-emerald-300','bg-[#EFEBE9] border-[#D7CCC8]','bg-gray-100 border-gray-300')}`}>
+                                                    <td className="p-2">ИТОГО:</td>
+                                                    <td className="p-2 text-right font-mono opacity-60">
+                                                        {Object.keys(distributionMap).reduce((s, k) => s + (Number(workdays[k]?.tripKm) || 0), 0).toFixed(1)}
+                                                    </td>
+                                                    <td className="p-2 text-right font-mono text-amber-500">
+                                                        +{Object.values(distributionMap).reduce((s, v) => s + v, 0)} км
+                                                    </td>
+                                                    <td className="p-2 text-right font-mono">
+                                                        {(Object.keys(distributionMap).reduce((s, k) => s + (Number(workdays[k]?.tripKm) || 0), 0) + Object.values(distributionMap).reduce((s, v) => s + v, 0)).toFixed(1)}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* Кнопка применения к месяцу */}
+                                    <button
+                                        type="button"
+                                        onClick={handleApply}
+                                        className={`w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold shadow-md transition-transform active:scale-[0.99] ${btnPrimary}`}
+                                    >
+                                        <IconCheck size={18} />
+                                        Применить пробеги к месяцу ({targetTotal} км)
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
 
                     {/* Заглушки кнопок Этапа 2 */}
-                    <button
-                        disabled
-                        className="w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold opacity-40 cursor-not-allowed bg-gray-400 text-white"
-                    >
-                        🗺 Подобрать маршруты (Яндекс Карты) — Этап 2
-                    </button>
-                    <button
-                        disabled
-                        className="w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold opacity-40 cursor-not-allowed bg-gray-400 text-white"
-                    >
-                        <IconDownload size={18} />
-                        Сформировать и скачать отчёт — Этап 2
-                    </button>
+                    <div className="space-y-2 pt-2">
+                        <button
+                            disabled
+                            className="w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold opacity-40 cursor-not-allowed bg-gray-400 text-white"
+                        >
+                            🗺 Подобрать маршруты (Яндекс Карты) — Этап 2
+                        </button>
+                        <button
+                            disabled
+                            className="w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold opacity-40 cursor-not-allowed bg-gray-400 text-white"
+                        >
+                            <IconDownload size={18} />
+                            Сформировать и скачать отчёт — Этап 2
+                        </button>
+                    </div>
                 </div>
             );
         };
@@ -2779,6 +3408,13 @@
                 } catch { return {}; }
             });
 
+            /* ── Справочник адресов ── */
+            const [addresses, setAddresses] = useState(() => {
+                try {
+                    return JSON.parse(localStorage.getItem('expert_report_addresses') || '[]');
+                } catch { return []; }
+            });
+
             /* ── Данные месяцев ── */
             const [months, setMonths] = useState(() => {
                 try {
@@ -2794,8 +3430,10 @@
             const isHydratingRef = useRef(true);
             const userChangedProfileRef = useRef(false);
             const userChangedMonthRef = useRef(false);
+            const userChangedAddressesRef = useRef(false);
             const profileDebounceRef = useRef(null);
             const monthDebounceRef = useRef(null);
+            const addressesDebounceRef = useRef(null);
 
             /* ── Текущий месяц по умолчанию — сегодня ── */
             const now = new Date();
@@ -2850,6 +3488,13 @@
                 setProfile(newProfile);
             };
 
+            const updateAddresses = (newAddresses, isUserAction = false) => {
+                if (isUserAction) {
+                    userChangedAddressesRef.current = true;
+                }
+                setAddresses(newAddresses);
+            };
+
             /* ── Персистентность локального кэша ── */
             useEffect(() => {
                 localStorage.setItem('expert_app_theme', theme);
@@ -2900,9 +3545,11 @@
                     isHydratingRef.current = true;
                     userChangedProfileRef.current = false;
                     userChangedMonthRef.current = false;
+                    userChangedAddressesRef.current = false;
 
                     let loadedProfile = null;
                     let loadedMonths = null;
+                    let loadedAddresses = null;
 
                     if (res) {
                         if (res.profile) loadedProfile = res.profile;
@@ -2910,6 +3557,9 @@
 
                         if (res.months) loadedMonths = res.months;
                         else if (res.data && res.data.months) loadedMonths = res.data.months;
+
+                        if (res.addresses) loadedAddresses = res.addresses;
+                        else if (res.data && res.data.addresses) loadedAddresses = res.data.addresses;
                     }
 
                     if (loadedProfile && typeof loadedProfile === 'object') {
@@ -2917,6 +3567,9 @@
                     }
                     if (loadedMonths && typeof loadedMonths === 'object') {
                         setMonths(prev => ({ ...prev, ...loadedMonths }));
+                    }
+                    if (loadedAddresses && Array.isArray(loadedAddresses)) {
+                        setAddresses(loadedAddresses);
                     }
 
                     // Если новый пользователь — сразу фиксируем userId и pin на листе Профили
@@ -2967,6 +3620,7 @@
             const handleSwitchUser = () => {
                 if (profileDebounceRef.current) clearTimeout(profileDebounceRef.current);
                 if (monthDebounceRef.current) clearTimeout(monthDebounceRef.current);
+                if (addressesDebounceRef.current) clearTimeout(addressesDebounceRef.current);
                 localStorage.removeItem('expert_app_user_phone');
                 localStorage.removeItem('expert_app_user_pin');
                 localStorage.removeItem('expert_app_auth_verified');
@@ -3047,6 +3701,36 @@
                 }
             };
 
+            /* ── Сохранение справочника адресов в Google Таблицу ── */
+            const saveAddressesCloud = async (customAddresses) => {
+                const phone = normalizePhone(userPhone);
+                const pin = normalizePin(userPin);
+                const scriptUrl = settings.googleScriptUrl || DEFAULT_GOOGLE_SCRIPT_URL;
+                if (!isAuthVerified || !phone || phone.length !== 11 || !pin || pin.length !== 4 || !scriptUrl) return;
+
+                const listToSave = customAddresses || addresses;
+                setCloudStatus('syncing');
+                setCloudErrorMsg('');
+                try {
+                    const res = await callGoogleScript(scriptUrl, 'saveAddresses', {
+                        userId: phone,
+                        pin: pin,
+                        addresses: listToSave
+                    });
+                    if (res && (res.status === 'wrong_pin' || res.error === 'wrong_pin')) {
+                        setIsAuthVerified(false);
+                        localStorage.removeItem('expert_app_auth_verified');
+                        setAuthError('Неверный ПИН-код! Этот номер уже зарегистрирован другим пользователем.');
+                        return;
+                    }
+                    setCloudStatus('saved');
+                } catch (err) {
+                    console.error('Ошибка сохранения адресов:', err);
+                    setCloudStatus('error');
+                    setCloudErrorMsg(err.message || 'Ошибка сохранения адресов');
+                }
+            };
+
             /* ── Debounce автосохранения профиля (1500 мс) ── */
             useEffect(() => {
                 localStorage.setItem('expert_report_profile', JSON.stringify(profile));
@@ -3078,6 +3762,92 @@
                     if (monthDebounceRef.current) clearTimeout(monthDebounceRef.current);
                 };
             }, [months, currentMonthKey, isAuthVerified]);
+
+            /* ── Debounce автосохранения адресов (1500 мс) ── */
+            useEffect(() => {
+                localStorage.setItem('expert_report_addresses', JSON.stringify(addresses));
+                if (isHydratingRef.current || !isAuthVerified || !userChangedAddressesRef.current || !userPhone || !userPin) {
+                    return;
+                }
+                if (addressesDebounceRef.current) clearTimeout(addressesDebounceRef.current);
+                addressesDebounceRef.current = setTimeout(() => {
+                    saveAddressesCloud(addresses);
+                }, 1500);
+
+                return () => {
+                    if (addressesDebounceRef.current) clearTimeout(addressesDebounceRef.current);
+                };
+            }, [addresses, isAuthVerified]);
+
+            /* ── Применение распределения недостающего пробега к месяцу ── */
+            const handleApplyDistribution = (distributionMap) => {
+                if (!distributionMap || Object.keys(distributionMap).length === 0) return;
+
+                const year = currentMonthData.year;
+                const month = currentMonthData.month;
+                const totalDays = daysInMonth(year, month);
+                const activeSeason = currentMonthData.seasonOverride || getSeason(year, month);
+                const activeNorm = activeSeason === 'summer'
+                    ? (Number(profile.normSummer) || 0)
+                    : (Number(profile.normWinter) || 0);
+
+                const wd = { ...(currentMonthData.workdays || {}) };
+                for (let d = 1; d <= totalDays; d++) {
+                    const key = toDateStr(year, month, d);
+                    if (!wd[key]) {
+                        wd[key] = {
+                            isWorkday: false,
+                            tripKm: 0,
+                            odometerStart: 0,
+                            odometerEnd: 0,
+                            fuelStart: 0,
+                            fuelEnd: 0,
+                            trips: [],
+                        };
+                    }
+                }
+
+                let totalAdded = 0;
+                let daysCount = 0;
+                Object.entries(distributionMap).forEach(([dateKey, addedKm]) => {
+                    const add = Math.round(Number(addedKm) || 0);
+                    if (add > 0) {
+                        if (!wd[dateKey]) {
+                            wd[dateKey] = {
+                                isWorkday: true,
+                                tripKm: 0,
+                                odometerStart: 0,
+                                odometerEnd: 0,
+                                fuelStart: 0,
+                                fuelEnd: 0,
+                                trips: [],
+                            };
+                        }
+                        wd[dateKey] = {
+                            ...wd[dateKey],
+                            isWorkday: true,
+                            tripKm: Math.round(((Number(wd[dateKey].tripKm) || 0) + add) * 10) / 10
+                        };
+                        totalAdded += add;
+                        daysCount++;
+                    }
+                });
+
+                const recalced = recalcWorkdays(
+                    wd,
+                    currentMonthData.odometerStart,
+                    currentMonthData.fuelStart,
+                    currentMonthData.refuels || [],
+                    activeNorm
+                );
+
+                updateCurrentMonth({
+                    ...currentMonthData,
+                    workdays: recalced
+                }, true);
+
+                alert(`✓ Успешно распределено ${totalAdded} км по ${daysCount} дням месяца! Цепочка одометров пересчитана.`);
+            };
 
             /* ── Перенос входящих остатков с прошлого месяца ── */
             const applyPrevMonthBalances = useCallback((targetYear, targetMonth, force = false) => {
@@ -3343,6 +4113,13 @@
                                 <AutoSelectScreen
                                     monthData={currentMonthData}
                                     profile={profile}
+                                    addresses={addresses}
+                                    onUpdateAddresses={updateAddresses}
+                                    onSaveAddressesCloud={() => saveAddressesCloud(addresses)}
+                                    allMonths={months}
+                                    onApplyDistribution={handleApplyDistribution}
+                                    cloudStatus={cloudStatus}
+                                    userPhone={userPhone}
                                     t={t}
                                 />
                             )}
