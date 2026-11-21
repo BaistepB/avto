@@ -90,6 +90,120 @@
         const APP_VERSION = '0.1.0';
         const DEFAULT_GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyTbFwjYlBPXp7n18cAIX_27z2TpuErD2-6F20J7v59YqaBCWY_8jZYl5KBKo4YV8Y/exec';
 
+        /* ── Адрес офиса и склада по умолчанию ── */
+        const DEFAULT_OFFICE_ADDRESS = {
+            address: 'г. Москва, ул. Бутырская, д. 62',
+            note: 'Офис и склад',
+            isDefault: true
+        };
+
+        /* Вспомогалка гарантии наличия офиса/склада в списке адресов */
+        const ensureDefaultOfficeAddress = (list, startPoint) => {
+            const arr = Array.isArray(list) ? [...list] : [];
+            const cleanStart = (startPoint || '').toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
+            const cleanOffice = DEFAULT_OFFICE_ADDRESS.address.toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
+            if (cleanStart && cleanStart === cleanOffice) {
+                return arr;
+            }
+            const hasOffice = arr.some(a => (a.address || '').toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '') === cleanOffice);
+            if (!hasOffice) {
+                arr.unshift({ ...DEFAULT_OFFICE_ADDRESS });
+            }
+            return arr;
+        };
+
+        /* Пул реалистичных адресов Москвы и МО с координатами для дорожного fallback */
+        const MOSCOW_MO_ADDRESS_POOL = [
+            { address: 'г. Москва, ул. Тверская, д. 22', lat: 55.7674, lon: 37.6009, area: 'ЦАО' },
+            { address: 'г. Москва, Ленинградский пр-т, д. 36', lat: 55.7915, lon: 37.5542, area: 'САО' },
+            { address: 'г. Москва, пр-т Мира, д. 102', lat: 55.8082, lon: 37.6378, area: 'СВАО' },
+            { address: 'г. Москва, ул. Профсоюзная, д. 56', lat: 55.6669, lon: 37.5457, area: 'ЮЗАО' },
+            { address: 'г. Москва, Варшавское шоссе, д. 125', lat: 55.6264, lon: 37.6186, area: 'ЮАО' },
+            { address: 'г. Москва, Дмитровское шоссе, д. 85', lat: 55.8561, lon: 37.5484, area: 'САО' },
+            { address: 'г. Москва, шоссе Энтузиастов, д. 42', lat: 55.7578, lon: 37.7471, area: 'ВАО' },
+            { address: 'г. Москва, Кутузовский пр-т, д. 32', lat: 55.7417, lon: 37.5312, area: 'ЗАО' },
+            { address: 'г. Москва, ул. Люблинская, д. 141', lat: 55.6617, lon: 37.7371, area: 'ЮВАО' },
+            { address: 'г. Москва, проспект Вернадского, д. 29', lat: 55.6841, lon: 37.5144, area: 'ЮЗАО' },
+            { address: 'г. Москва, Щёлковское шоссе, д. 75', lat: 55.8119, lon: 37.7854, area: 'ВАО' },
+            { address: 'г. Москва, ул. Большая Семёновская, д. 40', lat: 55.7824, lon: 37.7188, area: 'ВАО' },
+            { address: 'г. Москва, Каширское шоссе, д. 61', lat: 55.6472, lon: 37.6853, area: 'ЮАО' },
+            { address: 'г. Москва, Алтуфьевское шоссе, д. 48', lat: 55.8821, lon: 37.5878, area: 'СВАО' },
+            { address: 'г. Москва, Рязанский пр-т, д. 24', lat: 55.7231, lon: 37.7654, area: 'ЮВАО' },
+            { address: 'г. Москва, Мичуринский пр-т, д. 16', lat: 55.7001, lon: 37.5023, area: 'ЗАО' },
+            { address: 'МО, г. Химки, ул. Ленинградская, д. 16', lat: 55.8924, lon: 37.4378, area: 'МО-Север' },
+            { address: 'МО, г. Мытищи, ул. Мира, д. 30', lat: 55.9145, lon: 37.7389, area: 'МО-Северо-Восток' },
+            { address: 'МО, г. Красногорск, ул. Ленина, д. 22', lat: 55.8289, lon: 37.3392, area: 'МО-Северо-Запад' },
+            { address: 'МО, г. Одинцово, Можайское шоссе, д. 71', lat: 55.6789, lon: 37.2845, area: 'МО-Запад' },
+            { address: 'МО, г. Люберцы, Октябрьский пр-т, д. 145', lat: 55.6823, lon: 37.8923, area: 'МО-Юго-Восток' },
+            { address: 'МО, г. Балашиха, шоссе Энтузиастов, д. 54', lat: 55.7994, lon: 37.9456, area: 'МО-Восток' },
+            { address: 'МО, г. Подольск, ул. Кирова, д. 38', lat: 55.4267, lon: 37.5389, area: 'МО-Юг' },
+            { address: 'МО, г. Видное, ул. Советская, д. 12', lat: 55.5512, lon: 37.7023, area: 'МО-Юг' },
+            { address: 'МО, г. Королёв, ул. Циолковского, д. 27', lat: 55.9189, lon: 37.8234, area: 'МО-Северо-Восток' },
+            { address: 'МО, г. Долгопрудный, Лихачёвский пр-т, д. 8', lat: 55.9324, lon: 37.5089, area: 'МО-Север' },
+            { address: 'МО, г. Зеленоград, Панфиловский пр-т, д. 10', lat: 55.9967, lon: 37.1989, area: 'ЗелАО' }
+        ];
+
+        /** Симметричный ключ кэша пары адресов (A-B == B-A) */
+        const makeDistanceCacheKey = (addr1, addr2) => {
+            const clean = (a) => String(a || '').trim().toLowerCase().replace(/[\s\u00A0.,/\\-]/g, ' ');
+            const n1 = clean(addr1);
+            const n2 = clean(addr2);
+            return n1 < n2 ? `${n1}|||${n2}` : `${n2}|||${n1}`;
+        };
+
+        /** Расчёт расстояния между координатами по формуле Haversine (в км) */
+        const haversineDistance = (lat1, lon1, lat2, lon2) => {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        };
+
+        /** Поиск приблизительных координат адреса */
+        const findApproxCoords = (addr) => {
+            const str = String(addr || '').toLowerCase();
+            if (str.includes('бутырская') || str.includes('склад') || str.includes('офис')) {
+                return { lat: 55.8012, lon: 37.5841 };
+            }
+            const matchInPool = MOSCOW_MO_ADDRESS_POOL.find(p => str.includes(p.address.toLowerCase().split(',')[1]?.trim() || '---'));
+            if (matchInPool) return { lat: matchInPool.lat, lon: matchInPool.lon };
+
+            if (str.includes('химки')) return { lat: 55.8924, lon: 37.4378 };
+            if (str.includes('мытищи')) return { lat: 55.9145, lon: 37.7389 };
+            if (str.includes('подольск')) return { lat: 55.4267, lon: 37.5389 };
+            if (str.includes('красногорск')) return { lat: 55.8289, lon: 37.3392 };
+            if (str.includes('одинцово')) return { lat: 55.6789, lon: 37.2845 };
+            if (str.includes('люберцы')) return { lat: 55.6823, lon: 37.8923 };
+            if (str.includes('балашиха')) return { lat: 55.7994, lon: 37.9456 };
+            if (str.includes('видное')) return { lat: 55.5512, lon: 37.7023 };
+            if (str.includes('королев') || str.includes('королёв')) return { lat: 55.9189, lon: 37.8234 };
+            if (str.includes('долгопрудный')) return { lat: 55.9324, lon: 37.5089 };
+            if (str.includes('зеленоград')) return { lat: 55.9967, lon: 37.1989 };
+
+            // Детерминированный хэш для неизвестных адресов внутри контура Москвы
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) hash = ((hash << 5) - hash) + str.charCodeAt(i);
+            const latOffset = ((Math.abs(hash) % 200) - 100) / 1000;
+            const lonOffset = ((Math.abs(hash >> 3) % 200) - 100) / 1000;
+            return { lat: 55.7512 + latOffset, lon: 37.6184 + lonOffset };
+        };
+
+        /** Оценка дорожного расстояния между двумя адресами (с коэффициентом извилистости дорог 1.35) */
+        const estimateRoadDistanceKm = (addr1, addr2) => {
+            const clean1 = String(addr1 || '').trim().toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
+            const clean2 = String(addr2 || '').trim().toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
+            if (!clean1 || !clean2 || clean1 === clean2) return 0;
+
+            const c1 = findApproxCoords(addr1);
+            const c2 = findApproxCoords(addr2);
+            const geo = haversineDistance(c1.lat, c1.lon, c2.lat, c2.lon);
+            return Math.max(3.0, Math.round(geo * 1.35 * 10) / 10);
+        };
+
         /* ═══════════════════════════════════════════════════
            2. СИСТЕМА 9 ТЕМ
         ═══════════════════════════════════════════════════ */
@@ -2166,6 +2280,10 @@
             onSaveAddressesCloud,
             allMonths = {},
             onApplyDistribution,
+            onApplyRoutes,
+            distanceCache = {},
+            onUpdateDistanceCache,
+            settings = {},
             cloudStatus,
             userPhone,
             t
@@ -2178,20 +2296,45 @@
                 ? (Number(profile.normSummer) || 0)
                 : (Number(profile.normWinter) || 0);
 
+            /* ── Способ расчёта: по остатку топлива ('fuel') или по одометру на конец месяца ('odometer') ── */
+            const [goalType, setGoalType] = useState('fuel');
             const [targetFuel, setTargetFuel] = useState('');
             const [isTargetFuelFocused, setIsTargetFuelFocused] = useState(false);
+            const [targetOdometer, setTargetOdometer] = useState('');
+            const [fitRoutesToMonthlyOdometer, setFitRoutesToMonthlyOdometer] = useState(true);
+            const [routePreviewMap, setRoutePreviewMap] = useState(null);
+            const [isGeneratingRoutes, setIsGeneratingRoutes] = useState(false);
 
-            const fuelStart    = Number(monthData.fuelStart) || 0;
-            const totalRefuels = (monthData.refuels || []).reduce((s, r) => s + (Number(r.liters) || 0), 0);
-            const workdays     = monthData.workdays || {};
-            const workdayKeys  = Object.keys(workdays).filter(k => workdays[k].isWorkday).sort();
-            const kmFromRoutes = workdayKeys.reduce((s, k) => s + (Number(workdays[k].tripKm) || 0), 0);
+            const odometerStart = Number(monthData.odometerStart) || 0;
+            const fuelStart     = Number(monthData.fuelStart) || 0;
+            const totalRefuels  = (monthData.refuels || []).reduce((s, r) => s + (Number(r.liters) || 0), 0);
+            const workdays      = monthData.workdays || {};
+            const workdayKeys   = Object.keys(workdays).filter(k => workdays[k].isWorkday).sort();
+            const kmFromRoutes  = workdayKeys.reduce((s, k) => s + (Number(workdays[k].tripKm) || 0), 0);
 
-            const target         = parseFuelInput(targetFuel);
-            const requiredFuel   = fuelStart + totalRefuels - target;
-            const requiredKm     = activeNorm > 0 ? (requiredFuel / activeNorm * 100) : 0;
-            const missingKm      = Math.max(0, requiredKm - kmFromRoutes);
-            const targetTotal    = Math.round(missingKm);
+            let target = 0;
+            let requiredFuel = 0;
+            let requiredKm = 0;
+            let projectedFuelEnd = 0;
+            let missingKm = 0;
+            let targetTotal = 0;
+
+            if (goalType === 'fuel') {
+                target = parseFuelInput(targetFuel);
+                requiredFuel = fuelStart + totalRefuels - target;
+                requiredKm = activeNorm > 0 ? (requiredFuel / activeNorm * 100) : 0;
+                missingKm = Math.max(0, requiredKm - kmFromRoutes);
+                targetTotal = Math.round(missingKm);
+                projectedFuelEnd = target;
+            } else {
+                const targetOdoVal = Number(targetOdometer) || 0;
+                requiredKm = targetOdoVal > 0 ? Math.max(0, targetOdoVal - odometerStart) : 0;
+                requiredFuel = activeNorm > 0 ? (requiredKm * activeNorm / 100) : 0;
+                projectedFuelEnd = fuelStart + totalRefuels - requiredFuel;
+                missingKm = Math.max(0, requiredKm - kmFromRoutes);
+                targetTotal = Math.round(missingKm);
+                target = Math.max(0, projectedFuelEnd);
+            }
 
             /* ── Стили текущей темы оформления ── */
             const accentClass = t(
@@ -2607,15 +2750,241 @@
                     return;
                 }
 
-                const updated = [...addresses, ...collected];
+                const updated = ensureDefaultOfficeAddress([...addresses, ...collected], profile?.startPoint);
                 onUpdateAddresses(updated, true);
                 alert(`Успешно добавлено ${collected.length} новых адресов из маршрутов!`);
             };
 
-            /* ── Удаление адреса ── */
+            /* ── Удаление адреса из справочника ── */
             const handleDeleteAddress = (idx) => {
+                const item = addresses[idx];
+                const cleanItem = (item?.address || '').toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
+                const cleanOffice = DEFAULT_OFFICE_ADDRESS.address.toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
+                if (cleanItem === cleanOffice) {
+                    if (!confirm('Это стандартный адрес офиса и склада. Вы уверены, что хотите удалить его из списка?')) return;
+                }
                 const updated = addresses.filter((_, i) => i !== idx);
                 onUpdateAddresses(updated, true);
+            };
+
+            /* ── Генерация маршрутов-петель для пустых рабочих дней ── */
+            const handleGenerateRoutes = () => {
+                const startPoint = (profile?.startPoint || '').trim();
+                if (!startPoint) {
+                    alert('Пожалуйста, укажите домашний адрес (Точку старта) во вкладке «Профиль» (Карточка сотрудника)!');
+                    return;
+                }
+
+                // Отбираем рабочие дни, где есть километраж, но ЕЩЁ НЕТ маршрутов (сохраняем загруженные из CSV дни!)
+                const eligibleDayKeys = workdayKeys.filter(k => {
+                    const d = workdays[k];
+                    const km = Number(d?.tripKm) || 0;
+                    const trips = d?.trips || [];
+                    return km > 0 && trips.length === 0;
+                });
+
+                if (eligibleDayKeys.length === 0) {
+                    const hasAnyTrips = workdayKeys.some(k => (workdays[k]?.trips || []).length > 0);
+                    if (hasAnyTrips) {
+                        alert('Во всех рабочих днях с пробегом уже заполнены маршруты (из CSV или ранее)!');
+                    } else {
+                        alert('В текущем месяце нет рабочих дней с пробегом. Сначала распределите километраж по дням (Шаг 1)!');
+                    }
+                    return;
+                }
+
+                setIsGeneratingRoutes(true);
+
+                try {
+                    const cleanStart = startPoint.toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
+                    const cleanOffice = DEFAULT_OFFICE_ADDRESS.address.toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
+
+                    // Пул пользовательских адресов (без старта и без офиса)
+                    const userPool = (addresses || []).filter(a => {
+                        const ca = (a.address || '').toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
+                        return ca && ca !== cleanStart && ca !== cleanOffice;
+                    }).map(a => a.address);
+
+                    // Пул стандартных адресов Москвы и МО (без старта и без офиса)
+                    const moPool = (MOSCOW_MO_ADDRESS_POOL || []).filter(a => {
+                        const ca = (a.address || '').toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
+                        return ca && ca !== cleanStart && ca !== cleanOffice;
+                    }).map(a => a.address);
+
+                    // Объединённый пул уникальных адресов
+                    const fullPool = Array.from(new Set([...userPool, ...moPool]));
+                    if (fullPool.length === 0) {
+                        fullPool.push('г. Москва, ул. Тверская, д. 13', 'г. Москва, пр-т Мира, д. 119');
+                    }
+
+                    const newPreview = {};
+                    const newCacheEntries = {};
+                    let lastOfficeDayIndex = -99;
+                    const taskTypeVariants = ['Осмотр ТС', 'Осмотр ТС', 'Осмотр объекта', 'Экспертиза'];
+                    let carryDelta = 0;
+
+                    for (let dayIdx = 0; dayIdx < eligibleDayKeys.length; dayIdx++) {
+                        const dateKey = eligibleDayKeys[dayIdx];
+                        const dayObj = workdays[dateKey];
+                        const plannedDayKm = Number(dayObj?.tripKm) || 0;
+
+                        // Включение заезда в офис/склад (~30–35% дней, не подряд)
+                        let includeOffice = false;
+                        if (dayIdx - lastOfficeDayIndex > 1) {
+                            const prob = (dayIdx - lastOfficeDayIndex >= 3) ? 0.65 : 0.33;
+                            if (Math.random() < prob) {
+                                includeOffice = true;
+                                lastOfficeDayIndex = dayIdx;
+                            }
+                        }
+
+                        // Оценка целевого километража для выбора количества точек (с учётом накопленной дельты)
+                        const baseKmForPoints = fitRoutesToMonthlyOdometer
+                            ? Math.max(10, plannedDayKm + carryDelta)
+                            : plannedDayKm;
+
+                        let targetPointsCount = 2;
+                        if (baseKmForPoints >= 160) {
+                            targetPointsCount = Math.random() < 0.5 ? 4 : 5;
+                        } else if (baseKmForPoints >= 110) {
+                            targetPointsCount = Math.random() < 0.5 ? 3 : 4;
+                        } else if (baseKmForPoints >= 65) {
+                            targetPointsCount = Math.random() < 0.5 ? 2 : 3;
+                        } else {
+                            targetPointsCount = 2;
+                        }
+
+                        const otherPointsNeeded = includeOffice ? Math.max(1, targetPointsCount - 1) : targetPointsCount;
+
+                        // Перемешиваем пул и выбираем адреса
+                        const shuffled = [...fullPool].sort(() => 0.5 - Math.random());
+                        const pickedOthers = shuffled.slice(0, Math.min(otherPointsNeeded, shuffled.length));
+
+                        // Формируем промежуточные адреса
+                        let intermediateAddrs = [];
+                        if (includeOffice) {
+                            if (Math.random() < 0.5) {
+                                intermediateAddrs = [DEFAULT_OFFICE_ADDRESS.address, ...pickedOthers];
+                            } else {
+                                intermediateAddrs = [...pickedOthers, DEFAULT_OFFICE_ADDRESS.address];
+                            }
+                        } else {
+                            intermediateAddrs = pickedOthers;
+                        }
+
+                        // Цепочка петли: Старт -> Точка 1 -> ... -> Точка N -> Финиш (Старт)
+                        const chain = [startPoint, ...intermediateAddrs, startPoint];
+
+                        // Расчёт дорожных расстояний плеч
+                        const rawLegs = [];
+                        for (let legIdx = 0; legIdx < chain.length - 1; legIdx++) {
+                            const fromA = chain[legIdx];
+                            const toA = chain[legIdx + 1];
+                            const cKey = makeDistanceCacheKey(fromA, toA);
+                            let legKm = distanceCache[cKey] || newCacheEntries[cKey];
+                            if (!legKm) {
+                                legKm = estimateRoadDistanceKm(fromA, toA);
+                                newCacheEntries[cKey] = legKm;
+                            }
+                            rawLegs.push(legKm);
+                        }
+
+                        const rawSum = Math.round(rawLegs.reduce((s, v) => s + v, 0) * 10) / 10;
+                        let actualDayKm = plannedDayKm;
+                        let scaledLegs = [];
+
+                        if (fitRoutesToMonthlyOdometer) {
+                            const isLastDay = (dayIdx === eligibleDayKeys.length - 1);
+                            if (!isLastDay) {
+                                actualDayKm = rawSum;
+                                const diff = plannedDayKm - actualDayKm;
+                                carryDelta += diff;
+                                scaledLegs = [...rawLegs];
+                            } else {
+                                // Последний рабочий день компенсирует накопленную дельту для 100% схождения с месячным одометром
+                                actualDayKm = Math.max(10, Math.round((plannedDayKm + carryDelta) * 10) / 10);
+                                const factor = actualDayKm / (rawSum || 1);
+                                scaledLegs = rawLegs.map(l => Math.max(1.0, Math.round(l * factor * 10) / 10));
+
+                                const sumScaled = Math.round(scaledLegs.reduce((s, v) => s + v, 0) * 10) / 10;
+                                const roundDiff = Math.round((actualDayKm - sumScaled) * 10) / 10;
+                                if (Math.abs(roundDiff) > 0.001) {
+                                    let maxLegIdx = 0;
+                                    for (let li = 1; li < scaledLegs.length; li++) {
+                                        if (scaledLegs[li] > scaledLegs[maxLegIdx]) maxLegIdx = li;
+                                    }
+                                    scaledLegs[maxLegIdx] = Math.max(1.0, Math.round((scaledLegs[maxLegIdx] + roundDiff) * 10) / 10);
+                                }
+                                carryDelta = 0;
+                            }
+                        } else {
+                            // Без подгонки: плечи строго масштабируются под плановый пробег дня
+                            actualDayKm = plannedDayKm;
+                            const factor = plannedDayKm / (rawSum || 1);
+                            scaledLegs = rawLegs.map(l => Math.max(1.0, Math.round(l * factor * 10) / 10));
+
+                            const sumScaled = Math.round(scaledLegs.reduce((s, v) => s + v, 0) * 10) / 10;
+                            const diff = Math.round((plannedDayKm - sumScaled) * 10) / 10;
+                            if (Math.abs(diff) > 0.001) {
+                                let maxLegIdx = 0;
+                                for (let li = 1; li < scaledLegs.length; li++) {
+                                    if (scaledLegs[li] > scaledLegs[maxLegIdx]) maxLegIdx = li;
+                                }
+                                scaledLegs[maxLegIdx] = Math.max(1.0, Math.round((scaledLegs[maxLegIdx] + diff) * 10) / 10);
+                            }
+                        }
+
+                        // Формируем промежуточные точки маршрута
+                        const dayTrips = intermediateAddrs.map((addr, idx) => {
+                            const isOffice = addr === DEFAULT_OFFICE_ADDRESS.address;
+                            const taskType = isOffice ? 'Офис и склад' : taskTypeVariants[idx % taskTypeVariants.length];
+                            const hour = 9 + Math.floor(idx * 2);
+                            const minute = (idx % 2 === 0) ? '00' : '30';
+                            return {
+                                order: idx + 1,
+                                address: addr,
+                                taskType: taskType,
+                                time: `${String(hour).padStart(2, '0')}:${minute}`,
+                                distanceKm: scaledLegs[idx]
+                            };
+                        });
+
+                        newPreview[dateKey] = {
+                            dateKey,
+                            targetKm: plannedDayKm,
+                            actualKm: actualDayKm,
+                            intermediateAddrs,
+                            trips: dayTrips,
+                            chain,
+                            scaledLegs,
+                            hasOffice: includeOffice,
+                            fitApplied: fitRoutesToMonthlyOdometer
+                        };
+                    }
+
+                    // Обновляем кэш расстояний новыми парами
+                    if (Object.keys(newCacheEntries).length > 0 && onUpdateDistanceCache) {
+                        Object.entries(newCacheEntries).forEach(([k, v]) => {
+                            onUpdateDistanceCache(k, v);
+                        });
+                    }
+
+                    setRoutePreviewMap(newPreview);
+                } catch (err) {
+                    console.error('Ошибка подбора маршрутов:', err);
+                    alert('Ошибка подбора маршрутов: ' + err.message);
+                } finally {
+                    setIsGeneratingRoutes(false);
+                }
+            };
+
+            /* ── Применение сгенерированных маршрутов ── */
+            const handleApplyRoutesClick = () => {
+                if (!routePreviewMap || Object.keys(routePreviewMap).length === 0) return;
+                if (onApplyRoutes) {
+                    onApplyRoutes(routePreviewMap);
+                }
+                setRoutePreviewMap(null);
             };
 
             /* ── Подсказка по диапазону дней ── */
@@ -2641,57 +3010,148 @@
                     <div className={`rounded-lg border p-4 ${cardClass}`}>
                         <p className={`text-xs font-bold mb-1 ${accentClass}`}>АВТОПОДБОР ПРОБЕГА</p>
                         <p className="text-xs opacity-50 mb-3">
-                            Введите целевой остаток топлива на конец месяца — система рассчитает требуемый расход и недостающий километраж.
+                            Выберите способ расчёта (по остатку топлива или по конечному одометру) — система рассчитает требуемый расход и недостающий километраж.
                         </p>
 
-                        <div className="mb-3">
-                            <label className="block text-xs opacity-60 mb-1">Целевой остаток на конец месяца (л)</label>
-                            <input
-                                type="text"
-                                inputMode="decimal"
-                                className={`w-full p-2 text-[16px] sm:text-sm rounded border ${inputSm}`}
-                                placeholder="Например: 10.000"
-                                value={targetFuel}
-                                onFocus={() => setIsTargetFuelFocused(true)}
-                                onChange={e => {
-                                    setTargetFuel(e.target.value);
-                                    setDistributionMap(null);
-                                }}
-                                onBlur={() => {
-                                    setIsTargetFuelFocused(false);
-                                    if (targetFuel.trim() !== '') {
-                                        const v = parseFuelInput(targetFuel);
-                                        setTargetFuel(formatFuel(v));
+                        {/* Переключатель способа расчёта */}
+                        <div className="flex rounded-lg p-1 bg-black/10 dark:bg-white/5 mb-3 gap-1">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (goalType !== 'fuel') {
+                                        setGoalType('fuel');
+                                        setDistributionMap(null);
+                                        setRoutePreviewMap(null);
                                     }
                                 }}
-                            />
+                                className={`flex-1 py-1.5 px-2 rounded-md text-xs font-bold transition-all ${
+                                    goalType === 'fuel'
+                                        ? `${t('bg-[#FFB300] text-black shadow','bg-amber-600 text-white shadow','bg-pink-600 text-white shadow','bg-blue-600 text-white shadow','bg-emerald-600 text-white shadow','bg-[#5D4037] text-white shadow','bg-[#C62828] text-white shadow')}`
+                                        : 'opacity-60 hover:opacity-100'
+                                }`}
+                            >
+                                По остатку топлива (л)
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (goalType !== 'odometer') {
+                                        setGoalType('odometer');
+                                        setDistributionMap(null);
+                                        setRoutePreviewMap(null);
+                                    }
+                                }}
+                                className={`flex-1 py-1.5 px-2 rounded-md text-xs font-bold transition-all ${
+                                    goalType === 'odometer'
+                                        ? `${t('bg-[#FFB300] text-black shadow','bg-amber-600 text-white shadow','bg-pink-600 text-white shadow','bg-blue-600 text-white shadow','bg-emerald-600 text-white shadow','bg-[#5D4037] text-white shadow','bg-[#C62828] text-white shadow')}`
+                                        : 'opacity-60 hover:opacity-100'
+                                }`}
+                            >
+                                По одометру на конец месяца (км)
+                            </button>
                         </div>
 
+                        {goalType === 'fuel' ? (
+                            <div className="mb-3">
+                                <label className="block text-xs opacity-60 mb-1">Целевой остаток на конец месяца (л)</label>
+                                <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    className={`w-full p-2 text-[16px] sm:text-sm rounded border ${inputSm}`}
+                                    placeholder="Например: 10.000"
+                                    value={targetFuel}
+                                    onFocus={() => setIsTargetFuelFocused(true)}
+                                    onChange={e => {
+                                        setTargetFuel(e.target.value);
+                                        setDistributionMap(null);
+                                        setRoutePreviewMap(null);
+                                    }}
+                                    onBlur={() => {
+                                        setIsTargetFuelFocused(false);
+                                        if (targetFuel.trim() !== '') {
+                                            const v = parseFuelInput(targetFuel);
+                                            setTargetFuel(formatFuel(v));
+                                        }
+                                    }}
+                                />
+                            </div>
+                        ) : (
+                            <div className="mb-3">
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="block text-xs opacity-60">Одометр на конец месяца (км)</label>
+                                    <span className="text-[11px] opacity-50 font-mono">Начало: {odometerStart} км</span>
+                                </div>
+                                <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    className={`w-full p-2 text-[16px] sm:text-sm rounded border ${inputSm}`}
+                                    placeholder={`Например: ${odometerStart > 0 ? (odometerStart + 2500) : 2500}`}
+                                    value={targetOdometer}
+                                    onChange={e => {
+                                        setTargetOdometer(e.target.value);
+                                        setDistributionMap(null);
+                                        setRoutePreviewMap(null);
+                                    }}
+                                />
+                            </div>
+                        )}
+
                         <div className="space-y-2 text-sm">
-                            <div className="flex justify-between">
-                                <span className="opacity-60">Начальный остаток:</span>
-                                <span className="font-mono font-bold">{formatFuel(fuelStart)} л</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="opacity-60">Сумма заправок:</span>
-                                <span className="font-mono font-bold">+{formatFuel(totalRefuels)} л</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="opacity-60">Целевой остаток:</span>
-                                <span className="font-mono font-bold">−{formatFuel(target)} л</span>
-                            </div>
-                            <div className={`flex justify-between font-bold pt-2 border-t ${t('border-gray-700','border-gray-200','border-pink-200','border-blue-200','border-emerald-200','border-[#D7CCC8]','border-gray-200')}`}>
-                                <span className={accentClass}>Требуемый расход:</span>
-                                <span className={`font-mono ${accentClass}`}>{formatFuel(requiredFuel)} л</span>
-                            </div>
-                            <div className={`flex justify-between font-bold ${accentClass}`}>
-                                <span>Требуемый пробег (норма {activeNorm} л/100км):</span>
-                                <span className="font-mono">{requiredKm.toFixed(1)} км</span>
-                            </div>
+                            {goalType === 'fuel' ? (
+                                <>
+                                    <div className="flex justify-between">
+                                        <span className="opacity-60">Начальный остаток:</span>
+                                        <span className="font-mono font-bold">{formatFuel(fuelStart)} л</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="opacity-60">Сумма заправок:</span>
+                                        <span className="font-mono font-bold">+{formatFuel(totalRefuels)} л</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="opacity-60">Целевой остаток:</span>
+                                        <span className="font-mono font-bold">−{formatFuel(target)} л</span>
+                                    </div>
+                                    <div className={`flex justify-between font-bold pt-2 border-t ${t('border-gray-700','border-gray-200','border-pink-200','border-blue-200','border-emerald-200','border-[#D7CCC8]','border-gray-200')}`}>
+                                        <span className={accentClass}>Требуемый расход:</span>
+                                        <span className={`font-mono ${accentClass}`}>{formatFuel(requiredFuel)} л</span>
+                                    </div>
+                                    <div className={`flex justify-between font-bold ${accentClass}`}>
+                                        <span>Требуемый пробег (норма {activeNorm} л/100км):</span>
+                                        <span className="font-mono">{requiredKm.toFixed(1)} км</span>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="flex justify-between">
+                                        <span className="opacity-60">Начальный одометр:</span>
+                                        <span className="font-mono font-bold">{odometerStart} км</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="opacity-60">Целевой одометр на конец:</span>
+                                        <span className="font-mono font-bold">{Number(targetOdometer) || 0} км</span>
+                                    </div>
+                                    <div className={`flex justify-between font-bold pt-2 border-t ${t('border-gray-700','border-gray-200','border-pink-200','border-blue-200','border-emerald-200','border-[#D7CCC8]','border-gray-200')}`}>
+                                        <span className={accentClass}>Требуемый пробег за месяц:</span>
+                                        <span className={`font-mono ${accentClass}`}>{requiredKm.toFixed(1)} км</span>
+                                    </div>
+                                    <div className="flex justify-between opacity-80 text-xs">
+                                        <span>Требуемый расход (норма {activeNorm} л/100км):</span>
+                                        <span className="font-mono font-bold">{formatFuel(requiredFuel)} л</span>
+                                    </div>
+                                    <div className="flex justify-between opacity-80 text-xs">
+                                        <span>Расчётный остаток топлива на конец:</span>
+                                        <span className={`font-mono font-bold ${projectedFuelEnd < -0.001 ? 'text-red-500' : 'text-emerald-500'}`}>
+                                            {formatFuel(projectedFuelEnd)} л
+                                        </span>
+                                    </div>
+                                </>
+                            )}
+
                             <div className="flex justify-between opacity-70">
                                 <span>Пробег из маршрутов:</span>
                                 <span className="font-mono">{kmFromRoutes.toFixed(1)} км</span>
                             </div>
+
                             <div className={`flex justify-between font-bold pt-2 border-t ${t('border-gray-700','border-gray-200','border-pink-200','border-blue-200','border-emerald-200','border-[#D7CCC8]','border-gray-200')}`}>
                                 <span className={missingKm > 0 ? 'text-orange-500' : 'text-green-500'}>
                                     {missingKm > 0 ? '⚠ Недостающий пробег:' : '✓ Маршрутов достаточно:'}
@@ -2700,6 +3160,16 @@
                                     {missingKm > 0 ? `${missingKm.toFixed(1)} км (округлённо ${targetTotal} км)` : '0 км'}
                                 </span>
                             </div>
+
+                            {/* Предупреждение о нехватке топлива при целевом одометре */}
+                            {goalType === 'odometer' && projectedFuelEnd < -0.001 && (
+                                <div className="mt-2 p-2.5 rounded text-xs bg-red-500/15 border border-red-500/40 text-red-500 flex items-center gap-2">
+                                    <IconAlertTriangle size={16} className="flex-shrink-0" />
+                                    <span>
+                                        При таком конечном пробеге не хватает топлива ({formatFuel(Math.abs(projectedFuelEnd))} л) — проверьте заправки или уменьшите конечный одометр.
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -3053,14 +3523,163 @@
                         </div>
                     )}
 
-                    {/* Заглушки кнопок Этапа 2 */}
-                    <div className="space-y-2 pt-2">
+                    {/* КАРТОЧКА 3: ПОДБОР МАРШРУТОВ-ПЕТЕЛЬ */}
+                    <div className={`rounded-lg border p-4 ${cardClass}`}>
+                        <p className={`text-xs font-bold mb-1 ${accentClass}`}>ПОДБОР МАРШРУТОВ-ПЕТЕЛЬ</p>
+                        <p className="text-xs opacity-60 mb-3">
+                            Генерация цепочек «Точка старта → промежуточные точки → Точка старта» для рабочих дней без маршрутов (с сохранением импортированных из CSV дней).
+                        </p>
+
+                        {/* Чекбокс подгонки пробега под фактический дорожный километраж */}
+                        <div className="flex items-start gap-2 mb-3 p-2 rounded bg-black/5 dark:bg-white/5 border border-current/10">
+                            <input
+                                type="checkbox"
+                                id="fitRoutesCheckbox"
+                                checked={fitRoutesToMonthlyOdometer}
+                                onChange={e => setFitRoutesToMonthlyOdometer(e.target.checked)}
+                                className="mt-0.5 w-4 h-4 rounded text-amber-500 focus:ring-amber-500 cursor-pointer"
+                            />
+                            <label htmlFor="fitRoutesCheckbox" className="text-xs cursor-pointer select-none leading-snug">
+                                <strong>Подгонять пробег дней под фактический километраж маршрутов</strong> с сохранением итогового пробега месяца
+                            </label>
+                        </div>
+
                         <button
-                            disabled
-                            className="w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold opacity-40 cursor-not-allowed bg-gray-400 text-white"
+                            type="button"
+                            onClick={handleGenerateRoutes}
+                            disabled={isGeneratingRoutes}
+                            className={`w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold shadow-md transition-transform active:scale-[0.99] ${btnPrimary}`}
                         >
-                            🗺 Подобрать маршруты (Яндекс Карты) — Этап 2
+                            <IconMapPin size={18} />
+                            {isGeneratingRoutes ? 'Подбираем маршруты-петли...' : '🗺 Подобрать маршруты-петли для рабочих дней'}
                         </button>
+
+                        {/* Блок предпросмотра сгенерированных маршрутов */}
+                        {routePreviewMap && (() => {
+                            const previewList = Object.values(routePreviewMap);
+                            const totalPreviewDays = previewList.length;
+                            const totalPreviewPoints = previewList.reduce((s, d) => s + (d.trips?.length || 0), 0);
+                            const sumPlannedKm = Math.round(previewList.reduce((s, r) => s + (Number(r.targetKm) || 0), 0) * 10) / 10;
+                            const sumActualKm = Math.round(previewList.reduce((s, r) => s + (Number(r.actualKm || r.targetKm) || 0), 0) * 10) / 10;
+                            const diffPreviewKm = Math.round((sumActualKm - sumPlannedKm) * 10) / 10;
+
+                            const otherDaysKm = workdayKeys
+                                .filter(k => !routePreviewMap[k])
+                                .reduce((s, k) => s + (Number(workdays[k]?.tripKm) || 0), 0);
+                            const projectedMonthOdoEnd = Math.round(odometerStart + otherDaysKm + sumActualKm);
+
+                            return (
+                                <div className="mt-4 space-y-3 animate-fade-in">
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-xs font-bold opacity-80">
+                                            Предпросмотр маршрутов ({totalPreviewDays} дн., {totalPreviewPoints} точек):
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={() => setRoutePreviewMap(null)}
+                                            className="text-xs opacity-50 hover:opacity-100 underline"
+                                        >
+                                            Сбросить предпросмотр
+                                        </button>
+                                    </div>
+
+                                    <div className="max-h-72 overflow-y-auto border rounded text-xs">
+                                        <table className="w-full border-collapse">
+                                            <thead>
+                                                <tr className={`border-b opacity-70 ${t('bg-[#282B30]','bg-gray-100','bg-pink-100','bg-blue-100','bg-emerald-100','bg-[#D7CCC8]','bg-gray-100')}`}>
+                                                    <th className="p-2 text-left font-semibold">Дата</th>
+                                                    <th className="p-2 text-right font-semibold">План км</th>
+                                                    <th className="p-2 text-right font-semibold">Маршрут км</th>
+                                                    <th className="p-2 text-left font-semibold">Цепочка маршрута-петли</th>
+                                                    <th className="p-2 text-center font-semibold">Точек</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-current/10">
+                                                {Object.entries(routePreviewMap).sort(([a], [b]) => a.localeCompare(b)).map(([dateKey, route]) => (
+                                                    <tr key={dateKey} className={listRowHover}>
+                                                        <td className="p-2 font-mono font-medium whitespace-nowrap align-top">{dateKey}</td>
+                                                        <td className="p-2 text-right font-mono opacity-60 whitespace-nowrap align-top">{Number(route.targetKm || 0).toFixed(1)}</td>
+                                                        <td className="p-2 text-right font-mono font-bold text-amber-500 whitespace-nowrap align-top">
+                                                            {Number(route.actualKm || route.targetKm || 0).toFixed(1)} км
+                                                        </td>
+                                                        <td className="p-2">
+                                                            <div className="space-y-1">
+                                                                <div className="flex items-center gap-1 opacity-75">
+                                                                    <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold flex-shrink-0">Старт</span>
+                                                                    <span className="truncate max-w-[220px]">{profile?.startPoint}</span>
+                                                                </div>
+                                                                {route.trips.map((t, idx) => (
+                                                                    <div key={idx} className="flex items-center gap-1 pl-2 border-l-2 border-current/20">
+                                                                        <span className="text-[10px] px-1 rounded bg-black/10 dark:bg-white/10 font-bold flex-shrink-0">{t.order}</span>
+                                                                        <span className="truncate max-w-[200px] font-medium">{t.address}</span>
+                                                                        {t.taskType && (
+                                                                            <span className="text-[9px] px-1 rounded bg-amber-500/20 text-amber-500 flex-shrink-0">{t.taskType}</span>
+                                                                        )}
+                                                                        {t.distanceKm && (
+                                                                            <span className="text-[10px] font-mono opacity-50 ml-auto flex-shrink-0">{Number(t.distanceKm).toFixed(1)} км</span>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                                <div className="flex items-center gap-1 opacity-75">
+                                                                    <span className="text-[10px] px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 font-bold flex-shrink-0">Финиш</span>
+                                                                    <span className="truncate max-w-[220px]">{profile?.startPoint}</span>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-2 text-center font-mono whitespace-nowrap align-top">
+                                                            <span className="px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 font-bold">
+                                                                {route.trips.length}
+                                                            </span>
+                                                            {route.hasOffice && (
+                                                                <span className="ml-1 text-[11px]" title="Заезд в офис и склад">🏢</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                                {/* Строка ИТОГО с одометром на конец месяца */}
+                                                <tr className={`font-bold border-t-2 ${t('bg-[#282B30] border-gray-600','bg-gray-100 border-gray-300','bg-pink-100 border-pink-300','bg-blue-100 border-blue-300','bg-emerald-100 border-emerald-300','bg-[#D7CCC8] border-[#BCAAA4]','bg-gray-100 border-gray-300')}`}>
+                                                    <td className="p-2 font-mono">ИТОГО:</td>
+                                                    <td className="p-2 text-right font-mono opacity-60 whitespace-nowrap">{sumPlannedKm.toFixed(1)}</td>
+                                                    <td className="p-2 text-right font-mono text-amber-500 whitespace-nowrap">
+                                                        {sumActualKm.toFixed(1)} км
+                                                        {diffPreviewKm !== 0 && (
+                                                            <span className={`block text-[10px] ${diffPreviewKm > 0 ? 'text-orange-400' : 'text-blue-400'}`}>
+                                                                ({diffPreviewKm > 0 ? `+${diffPreviewKm}` : diffPreviewKm} км)
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-2 text-xs">
+                                                        <span>Одометр на конец: <strong className="font-mono">{projectedMonthOdoEnd} км</strong></span>
+                                                        {odometerStart > 0 && (
+                                                            <span className="block text-[10px] opacity-60 font-mono">
+                                                                (Начало {odometerStart} + Пробег месяца {(otherDaysKm + sumActualKm).toFixed(1)} км)
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-2 text-center font-mono font-bold whitespace-nowrap">
+                                                        {totalPreviewPoints}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* Кнопка применения сгенерированных маршрутов */}
+                                    <button
+                                        type="button"
+                                        onClick={handleApplyRoutesClick}
+                                        className={`w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold shadow-md transition-transform active:scale-[0.99] ${btnPrimary}`}
+                                    >
+                                        <IconCheck size={18} />
+                                        Применить маршруты к месяцу ({totalPreviewDays} дн.)
+                                    </button>
+                                </div>
+                            );
+                        })()}
+                    </div>
+
+                    {/* Заглушка скачивания отчёта Этапа 2 */}
+                    <div className="pt-2">
                         <button
                             disabled
                             className="w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold opacity-40 cursor-not-allowed bg-gray-400 text-white"
@@ -3597,9 +4216,27 @@
             /* ── Справочник адресов ── */
             const [addresses, setAddresses] = useState(() => {
                 try {
-                    return JSON.parse(localStorage.getItem('expert_report_addresses') || '[]');
-                } catch { return []; }
+                    const saved = JSON.parse(localStorage.getItem('expert_report_addresses') || '[]');
+                    const prof = JSON.parse(localStorage.getItem('expert_report_profile') || '{}');
+                    return ensureDefaultOfficeAddress(saved, prof?.startPoint);
+                } catch { return ensureDefaultOfficeAddress([], ''); }
             });
+
+            /* ── Кэш расстояний (localStorage + память) ── */
+            const [distanceCache, setDistanceCache] = useState(() => {
+                try {
+                    return JSON.parse(localStorage.getItem('expert_report_distance_cache') || '{}');
+                } catch { return {}; }
+            });
+
+            const updateDistanceCache = useCallback((key, km) => {
+                if (!key || typeof km !== 'number' || isNaN(km)) return;
+                setDistanceCache(prev => {
+                    const next = { ...prev, [key]: Math.round(km * 10) / 10 };
+                    localStorage.setItem('expert_report_distance_cache', JSON.stringify(next));
+                    return next;
+                });
+            }, []);
 
             /* ── Данные месяцев ── */
             const [months, setMonths] = useState(() => {
@@ -3755,7 +4392,14 @@
                         setMonths(prev => ({ ...prev, ...loadedMonths }));
                     }
                     if (loadedAddresses && Array.isArray(loadedAddresses)) {
-                        setAddresses(loadedAddresses);
+                        setAddresses(ensureDefaultOfficeAddress(loadedAddresses, (loadedProfile || profile)?.startPoint));
+                    }
+                    if (res && res.distanceCache && typeof res.distanceCache === 'object') {
+                        setDistanceCache(prev => {
+                            const merged = { ...prev, ...res.distanceCache };
+                            localStorage.setItem('expert_report_distance_cache', JSON.stringify(merged));
+                            return merged;
+                        });
                     }
 
                     // Если новый пользователь — сразу фиксируем userId и pin на листе Профили
@@ -4035,6 +4679,63 @@
                 alert(`✓ Успешно распределено ${totalAdded} км по ${daysCount} дням месяца! Цепочка одометров пересчитана.`);
             };
 
+            /* ── Применение сгенерированных маршрутов-петель к месяцу ── */
+            const handleApplyRoutes = (routePreviewMap) => {
+                if (!routePreviewMap || Object.keys(routePreviewMap).length === 0) return;
+
+                const year = currentMonthData.year;
+                const month = currentMonthData.month;
+                const activeSeason = currentMonthData.seasonOverride || getSeason(year, month);
+                const activeNorm = activeSeason === 'summer'
+                    ? (Number(profile.normSummer) || 0)
+                    : (Number(profile.normWinter) || 0);
+
+                const wd = { ...(currentMonthData.workdays || {}) };
+                let daysUpdated = 0;
+                let totalTripsCount = 0;
+
+                Object.entries(routePreviewMap).forEach(([dateKey, routeInfo]) => {
+                    if (wd[dateKey] && Array.isArray(routeInfo?.trips) && routeInfo.trips.length > 0) {
+                        const newKm = (routeInfo.fitApplied && typeof routeInfo.actualKm === 'number')
+                            ? routeInfo.actualKm
+                            : (Number(wd[dateKey].tripKm) || routeInfo.targetKm || 0);
+
+                        wd[dateKey] = {
+                            ...wd[dateKey],
+                            trips: routeInfo.trips,
+                            tripKm: newKm
+                        };
+                        daysUpdated++;
+                        totalTripsCount += routeInfo.trips.length;
+                    }
+                });
+
+                const recalced = recalcWorkdays(
+                    wd,
+                    currentMonthData.odometerStart,
+                    currentMonthData.fuelStart,
+                    currentMonthData.refuels || [],
+                    activeNorm
+                );
+
+                // Проверка на отрицательный остаток топлива
+                const hasNegativeFuel = Object.values(recalced).some(d => d.isWorkday && Number(d.fuelEnd) < -0.0001);
+                if (hasNegativeFuel) {
+                    const proceed = confirm(
+                        'Внимание: после пересчёта маршрутов в некоторые дни остаток топлива опускается ниже нуля.\n' +
+                        'Применить изменения всё равно?'
+                    );
+                    if (!proceed) return;
+                }
+
+                updateCurrentMonth({
+                    ...currentMonthData,
+                    workdays: recalced
+                }, true);
+
+                alert(`✓ Успешно заполнено ${totalTripsCount} точек маршрута в ${daysUpdated} рабочих днях месяца! Цепочка одометров пересчитана.`);
+            };
+
             /* ── Перенос входящих остатков с прошлого месяца ── */
             const applyPrevMonthBalances = useCallback((targetYear, targetMonth, force = false) => {
                 const targetKey = `${targetYear}-${String(targetMonth).padStart(2,'0')}`;
@@ -4304,6 +5005,10 @@
                                     onSaveAddressesCloud={() => saveAddressesCloud(addresses)}
                                     allMonths={months}
                                     onApplyDistribution={handleApplyDistribution}
+                                    onApplyRoutes={handleApplyRoutes}
+                                    distanceCache={distanceCache}
+                                    onUpdateDistanceCache={updateDistanceCache}
+                                    settings={settings}
                                     cloudStatus={cloudStatus}
                                     userPhone={userPhone}
                                     t={t}
