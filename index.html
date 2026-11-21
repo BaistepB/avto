@@ -254,6 +254,27 @@
             return String(v);
         };
 
+        /** Универсальное извлечение числового значения из ячейки ExcelJS */
+        const extractNumericCell = (cell) => {
+            if (!cell || cell.value === null || cell.value === undefined) return null;
+            let raw = cell.value;
+            if (raw && typeof raw === 'object' && 'result' in raw) {
+                raw = raw.result;
+            } else if (raw && typeof raw === 'object' && 'richText' in raw && Array.isArray(raw.richText)) {
+                raw = raw.richText.map(r => r.text).join('');
+            }
+            if (typeof raw === 'number') {
+                return Number.isFinite(raw) ? raw : null;
+            }
+            if (typeof raw === 'string') {
+                const cleaned = raw.replace(/[\s\u00A0]/g, '').replace(',', '.');
+                if (!cleaned) return null;
+                const num = Number(cleaned);
+                return Number.isFinite(num) ? num : null;
+            }
+            return null;
+        };
+
         /** Нормализация номера телефона (строго 11 цифр, начиная с 7) */
         const normalizePhone = (raw) => {
             if (!raw) return '';
@@ -1092,19 +1113,74 @@
                     const buf = await file.arrayBuffer();
                     const wb  = new ExcelJS.Workbook();
                     await wb.xlsx.load(buf);
-                    // Лист «Расчет» — ищем конечные значения
-                    const ws = wb.getWorksheet('Расчет') || wb.getWorksheet('Расчёт');
-                    if (!ws) { alert('Лист «Расчет» не найден в файле'); return; }
-                    // Предполагаем конечный одометр в B4, конечный остаток в B5 (уточним при Э2)
-                    const odom = Number(cellValue(ws.getCell('B4'))) || 0;
-                    const fuel = Number(cellValue(ws.getCell('B5'))) || 0;
-                    const wd = recalcWorkdays(ensureWorkdays(), odom, fuel, monthData.refuels || [], activeNorm);
-                    update({ odometerStart: odom, fuelStart: fuel, workdays: wd });
-                    alert(`Загружено: одометр ${odom} км, остаток ${fuel.toFixed(1)} л`);
+
+                    // Лист «Расчет» — ищем по имени без учета регистра и пробелов (с поддержкой буквы «ё»)
+                    const ws = (wb.worksheets || []).find(s => {
+                        const n = (s.name || '').trim().toLowerCase();
+                        return n === 'расчет' || n === 'расчёт';
+                    }) || wb.getWorksheet('Расчет') || wb.getWorksheet('Расчёт');
+
+                    if (!ws) {
+                        alert('Лист «Расчет» не найден в выбранном файле Excel. Проверьте правильность файла отчёта.');
+                        return;
+                    }
+
+                    // Конечный одометр (odometerEnd): снизу вверх по строкам от 35 до 5 по колонке D.
+                    // Первое найденное число > 0 (нерабочие дни в конце месяца пустые).
+                    let odometerEnd = null;
+                    for (let row = 35; row >= 5; row--) {
+                        const val = extractNumericCell(ws.getCell('D' + row));
+                        if (val !== null && val > 0) {
+                            odometerEnd = Math.round(val);
+                            break;
+                        }
+                    }
+
+                    // Конечный остаток топлива (fuelEnd): снизу вверх по строкам от 35 до 5 по колонке J.
+                    // Первое найденное число >= 0 (обычно J35), округлить до 3 знаков после запятой.
+                    let fuelEnd = null;
+                    for (let row = 35; row >= 5; row--) {
+                        const val = extractNumericCell(ws.getCell('J' + row));
+                        if (val !== null && val >= 0) {
+                            fuelEnd = Number(val.toFixed(3));
+                            break;
+                        }
+                    }
+
+                    if (odometerEnd === null && fuelEnd === null) {
+                        alert('Не удалось найти данные одометра (колонка D) и остатка топлива (колонка J) в строках 5–35 на листе «Расчет».');
+                        return;
+                    }
+                    if (odometerEnd === null) {
+                        alert('Не удалось найти конечный одометр в колонке D (строки 5–35) на листе «Расчет».');
+                        return;
+                    }
+                    if (fuelEnd === null) {
+                        alert('Не удалось найти конечный остаток топлива в колонке J (строки 5–35) на листе «Расчет».');
+                        return;
+                    }
+
+                    // Применяем входящие данные в текущий месяц и пересчитываем цепочку рабочих дней
+                    const wd = recalcWorkdays(
+                        ensureWorkdays(),
+                        odometerEnd,
+                        fuelEnd,
+                        monthData.refuels || [],
+                        activeNorm
+                    );
+                    update({
+                        odometerStart: odometerEnd,
+                        fuelStart: fuelEnd,
+                        workdays: wd
+                    });
+
+                    const odomFmt = odometerEnd.toLocaleString('ru-RU');
+                    alert(`Загружено из прошлого отчёта: одометр ${odomFmt} км, остаток ${fuelEnd} л`);
                 } catch (err) {
-                    alert('Ошибка чтения файла: ' + err.message);
+                    alert('Ошибка чтения файла: ' + (err?.message || err));
+                } finally {
+                    e.target.value = '';
                 }
-                e.target.value = '';
             };
 
             /* ---- Общая статистика ---- */
