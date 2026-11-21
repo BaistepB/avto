@@ -1466,7 +1466,7 @@
         /* ═══════════════════════════════════════════════════
            8. КОМПОНЕНТ: НАСТРОЙКА МЕСЯЦА + РАБОЧИЕ ДНИ
         ═══════════════════════════════════════════════════ */
-        const MonthSetup = ({ monthData, profile, onUpdate, allMonths, onUpdateAllMonths, onPullPrevMonth, onSaveMonthCloud, onExportExcel, cloudStatus, userPhone, t }) => {
+        const MonthSetup = ({ monthData, profile, onUpdate, allMonths, onUpdateAllMonths, onChangeMonthKey, onPullPrevMonth, onSaveMonthCloud, onLoadMonthCloud, onExportExcel, cloudStatus, userPhone, t }) => {
 
             const year  = monthData.year;
             const month = monthData.month;
@@ -1502,6 +1502,18 @@
                     );
                 }
             }, [monthData.fuelStart, year, month, isFuelStartFocused]);
+
+            /* ---- Загрузка текущего месяца из Google Таблицы с подтверждением ---- */
+            const handleLoadMonthClick = () => {
+                if (!onLoadMonthCloud) return;
+                const hasWorkdays = Object.values(monthData.workdays || {}).some(d => d.isWorkday && ((Number(d.tripKm) || 0) > 0 || (d.trips || []).length > 0));
+                const hasRefuels = (monthData.refuels || []).length > 0;
+                if (hasWorkdays || hasRefuels) {
+                    const confirmed = confirm('Загрузить данные за этот месяц из Google Таблицы? Текущие несохранённые изменения будут заменены.');
+                    if (!confirmed) return;
+                }
+                onLoadMonthCloud();
+            };
 
             /* ---- Вспомогалки обновления состояния ---- */
             const update = (patch) => onUpdate({ ...monthData, ...patch }, true);
@@ -2051,24 +2063,48 @@
                 'bg-[#C62828] text-white hover:bg-[#B71C1C]'
             );
 
+            const btnSecondary = t(
+                'bg-[#282B30] text-gray-300 hover:bg-[#32363C] border border-gray-700',
+                'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300',
+                'bg-pink-100 text-pink-800 hover:bg-pink-200 border border-pink-300',
+                'bg-blue-100 text-blue-800 hover:bg-blue-200 border border-blue-300',
+                'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300',
+                'bg-[#EFEBE9] text-[#4E342E] hover:bg-[#D7CCC8] border border-[#BCAAA4]',
+                'bg-gray-100 text-gray-800 hover:bg-gray-200 border border-gray-300'
+            );
+
             return (
                 <div className="w-full space-y-4 animate-fade-in">
 
                     {/* ── Выбор месяца и года ── */}
                     <div className={`rounded-lg border p-3 ${cardClass}`}>
-                        <div className="flex items-center justify-between mb-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                             <p className={`text-xs font-bold ${accentClass}`}>МЕСЯЦ ОТЧЁТА</p>
-                            <button
-                                type="button"
-                                onClick={onSaveMonthCloud}
-                                disabled={!userPhone || cloudStatus === 'syncing'}
-                                className={`min-h-[36px] px-3 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition-all ${
-                                    !userPhone ? 'opacity-40 cursor-not-allowed bg-gray-600 text-white' : btnPrimary
-                                }`}
-                            >
-                                <IconCloud size={14} />
-                                <span>{cloudStatus === 'syncing' ? 'Сохранение...' : 'Сохранить месяц в таблицу'}</span>
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleLoadMonthClick}
+                                    disabled={!userPhone || cloudStatus === 'syncing'}
+                                    className={`min-h-[36px] px-3 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition-all ${
+                                        !userPhone ? 'opacity-40 cursor-not-allowed bg-gray-600 text-white' : btnSecondary
+                                    }`}
+                                    title="Загрузить сохранённые данные за этот месяц из Google Таблицы"
+                                >
+                                    <IconRefresh size={14} className={cloudStatus === 'syncing' ? 'animate-spin' : ''} />
+                                    <span>Загрузить из таблицы</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={onSaveMonthCloud}
+                                    disabled={!userPhone || cloudStatus === 'syncing'}
+                                    className={`min-h-[36px] px-3 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition-all ${
+                                        !userPhone ? 'opacity-40 cursor-not-allowed bg-gray-600 text-white' : btnPrimary
+                                    }`}
+                                >
+                                    <IconCloud size={14} />
+                                    <span>{cloudStatus === 'syncing' ? 'Сохранение...' : 'Сохранить месяц в таблицу'}</span>
+                                </button>
+                            </div>
                         </div>
                         <div className="flex gap-2">
                             <select
@@ -2076,8 +2112,12 @@
                                 value={month}
                                 onChange={e => {
                                     const m = Number(e.target.value);
-                                    const override = monthData.seasonOverride;
-                                    update({ month: m, seasonOverride: override });
+                                    if (onChangeMonthKey) {
+                                        onChangeMonthKey(year, m);
+                                    } else {
+                                        const override = monthData.seasonOverride;
+                                        update({ month: m, seasonOverride: override });
+                                    }
                                 }}
                             >
                                 {MONTH_NAMES.slice(1).map((n, i) => (
@@ -2087,7 +2127,14 @@
                             <select
                                 className={`w-24 p-2 text-[16px] sm:text-sm rounded border ${inputSm}`}
                                 value={year}
-                                onChange={e => update({ year: Number(e.target.value) })}
+                                onChange={e => {
+                                    const y = Number(e.target.value);
+                                    if (onChangeMonthKey) {
+                                        onChangeMonthKey(y, month);
+                                    } else {
+                                        update({ year: y });
+                                    }
+                                }}
                             >
                                 {[2024, 2025, 2026, 2027, 2028].map(y => (
                                     <option key={y} value={y}>{y}</option>
@@ -2511,18 +2558,31 @@
                         </div>
                     </div>
 
-                    {/* ── Кнопка сохранения месяца в Google Таблицу ── */}
-                    <button
-                        type="button"
-                        onClick={onSaveMonthCloud}
-                        disabled={!userPhone || cloudStatus === 'syncing'}
-                        className={`w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold transition-all ${
-                            !userPhone ? 'opacity-40 cursor-not-allowed bg-gray-600 text-white' : btnPrimary
-                        }`}
-                    >
-                        <IconCloud size={18} />
-                        <span>{cloudStatus === 'syncing' ? 'Сохранение месяца в Google Таблицу...' : 'Сохранить месяц в Google Таблицу'}</span>
-                    </button>
+                    {/* ── Кнопки синхронизации месяца с Google Таблицей ── */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button
+                            type="button"
+                            onClick={handleLoadMonthClick}
+                            disabled={!userPhone || cloudStatus === 'syncing'}
+                            className={`w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold transition-all ${
+                                !userPhone ? 'opacity-40 cursor-not-allowed bg-gray-600 text-white' : btnSecondary
+                            }`}
+                        >
+                            <IconRefresh size={18} className={cloudStatus === 'syncing' ? 'animate-spin' : ''} />
+                            <span>Загрузить из таблицы</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={onSaveMonthCloud}
+                            disabled={!userPhone || cloudStatus === 'syncing'}
+                            className={`w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold transition-all ${
+                                !userPhone ? 'opacity-40 cursor-not-allowed bg-gray-600 text-white' : btnPrimary
+                            }`}
+                        >
+                            <IconCloud size={18} />
+                            <span>{cloudStatus === 'syncing' ? 'Сохранение месяца...' : 'Сохранить месяц в Google Таблицу'}</span>
+                        </button>
+                    </div>
 
                     {/* ── Кнопка «Скачать отчёт» ── */}
                     <button
@@ -2549,6 +2609,7 @@
             allMonths = {},
             onApplyDistribution,
             onApplyRoutes,
+            onUpdateMonth,
             distanceCache = {},
             onUpdateDistanceCache,
             settings = {},
@@ -2575,6 +2636,7 @@
             const [isGeneratingRoutes, setIsGeneratingRoutes] = useState(false);
             const [generationProgress, setGenerationProgress] = useState('');
             const [hasAnyOsrmRoutes, setHasAnyOsrmRoutes] = useState(false);
+            const [isCalculatingRouteKm, setIsCalculatingRouteKm] = useState(false);
 
             const odometerStart = Number(monthData.odometerStart) || 0;
             const fuelStart     = Number(monthData.fuelStart) || 0;
@@ -2582,6 +2644,12 @@
             const workdays      = monthData.workdays || {};
             const workdayKeys   = Object.keys(workdays).filter(k => workdays[k].isWorkday).sort();
             const kmFromRoutes  = workdayKeys.reduce((s, k) => s + (Number(workdays[k].tripKm) || 0), 0);
+
+            /* ── Дни с загруженными маршрутами, у которых пробег ещё не рассчитан ── */
+            const uncalculatedRouteDays = workdayKeys.filter(k => {
+                const d = workdays[k];
+                return (d.trips || []).length > 0 && (Number(d.tripKm) || 0) === 0;
+            });
 
             let target = 0;
             let requiredFuel = 0;
@@ -2739,10 +2807,9 @@
 
                     const isFuelSufficient = activeNorm > 0 ? (runningFuel >= minFuelNeeded) : true;
 
-                    // Если день ещё не выбран (не день с заправкой > 0 л)
-                    if (!newSelected[k]) {
-                        // Если топлива не хватает, и нет заправки и нет существующих поездок — пропускаем день (остаётся выходным)
-                        if (isFuelSufficient || hasRefuel || hasTrips || existingKm > 0) {
+                    // Если день ещё не выбран (не день с заправкой > 0 л) и в нём нет реальных поездок
+                    if (!newSelected[k] && !hasTrips) {
+                        if (isFuelSufficient) {
                             availableDays.push(k);
                         }
                     }
@@ -3036,6 +3103,139 @@
                 }
                 const updated = addresses.filter((_, i) => i !== idx);
                 onUpdateAddresses(updated, true);
+            };
+
+            /* ── Расчёт реального пробега загруженных из CSV маршрутов ── */
+            const calculateExistingRoutesKm = async () => {
+                const targetDayKeys = workdayKeys.filter(k => {
+                    const d = workdays[k];
+                    return d?.isWorkday && (d.trips || []).length > 0 && (Number(d.tripKm) || 0) === 0;
+                });
+
+                if (targetDayKeys.length === 0) {
+                    alert('Все дни с маршрутами уже имеют рассчитанный пробег.');
+                    return;
+                }
+
+                const startPoint = (profile?.startPoint || '').trim();
+                if (!startPoint) {
+                    alert('Пожалуйста, укажите домашний адрес (Точку старта) во вкладке «Профиль» (Карточка сотрудника)!');
+                    return;
+                }
+
+                setIsCalculatingRouteKm(true);
+
+                try {
+                    const yandexKey = settings?.yandexApiKey || '';
+                    const initialCache = getGeoCache();
+
+                    // Геокодируем стартовую точку
+                    const startKey = normalizeGeoKey(startPoint);
+                    const isStartCached = !!initialCache[startKey];
+                    const startCoords = await geocodeAddress(startPoint, yandexKey);
+                    if (!isStartCached) {
+                        await new Promise(r => setTimeout(r, 250));
+                    }
+
+                    if (!startCoords) {
+                        alert('Не удалось определить координаты точки старта. Проверьте адрес в профиле.');
+                        return;
+                    }
+
+                    const newWorkdays = { ...workdays };
+                    const newCacheEntries = {};
+                    let totalAddedKm = 0;
+                    let updatedDaysCount = 0;
+
+                    for (const dateKey of targetDayKeys) {
+                        const dayObj = workdays[dateKey];
+                        const trips = dayObj?.trips || [];
+                        const tripAddrs = trips
+                            .map(tr => (typeof tr === 'string' ? tr : (tr.address || tr.to || '')).trim())
+                            .filter(Boolean);
+
+                        if (tripAddrs.length === 0) continue;
+
+                        // Геокодируем адреса дня с паузой 250 мс для некашированных адресов
+                        const coordsList = [];
+                        for (const addr of tripAddrs) {
+                            const k = normalizeGeoKey(addr);
+                            const isCached = !!getGeoCache()[k];
+                            const c = await geocodeAddress(addr, yandexKey);
+                            if (!isCached) {
+                                await new Promise(r => setTimeout(r, 250));
+                            }
+                            coordsList.push(c || findApproxCoords(addr));
+                        }
+
+                        // Собираем полную петлю: Точка старта -> промежуточные точки -> Точка старта
+                        const loopCoords = [startCoords, ...coordsList, startCoords];
+                        const osrmResult = await fetchOsrmLoop(loopCoords);
+                        const loopKm = osrmResult.totalKm;
+                        const legs = osrmResult.legs || [];
+
+                        // Сохраняем плечи в кэш расстояний
+                        const fullAddrs = [startPoint, ...tripAddrs, startPoint];
+                        for (let li = 0; li < fullAddrs.length - 1; li++) {
+                            const cKey = makeDistanceCacheKey(fullAddrs[li], fullAddrs[li + 1]);
+                            const legDist = legs[li] || 0;
+                            if (legDist > 0) newCacheEntries[cKey] = legDist;
+                        }
+
+                        // Округляем итоговый пробег дня до целого числа (Math.round)
+                        const roundedDayKm = Math.round(loopKm);
+
+                        // Записываем плечи в trips (trip.distanceKm)
+                        const updatedTrips = trips.map((tr, idx) => {
+                            const tripObj = typeof tr === 'string' ? { address: tr } : { ...tr };
+                            return {
+                                ...tripObj,
+                                distanceKm: legs[idx] || 0
+                            };
+                        });
+
+                        newWorkdays[dateKey] = {
+                            ...dayObj,
+                            tripKm: roundedDayKm,
+                            trips: updatedTrips
+                        };
+
+                        totalAddedKm += roundedDayKm;
+                        updatedDaysCount++;
+                    }
+
+                    // Обновляем кэш расстояний
+                    if (Object.keys(newCacheEntries).length > 0 && onUpdateDistanceCache) {
+                        Object.entries(newCacheEntries).forEach(([k, v]) => {
+                            onUpdateDistanceCache(k, v);
+                        });
+                    }
+
+                    // Пересчитываем цепочку месяца через recalcWorkdays
+                    const recalced = recalcWorkdays(
+                        newWorkdays,
+                        monthData.odometerStart,
+                        monthData.fuelStart,
+                        monthData.refuels || [],
+                        activeNorm
+                    );
+
+                    // Обновляем месяц (с автосохранением в Google Таблицу)
+                    if (onUpdateMonth) {
+                        onUpdateMonth({
+                            ...monthData,
+                            workdays: recalced
+                        }, true);
+                    }
+
+                    setDistributionMap(null);
+                    alert(`Рассчитан пробег для ${updatedDaysCount} дн. с реальными маршрутами: +${totalAddedKm} км`);
+                } catch (err) {
+                    console.error('Ошибка расчёта пробега маршрутов:', err);
+                    alert('Ошибка расчёта пробега маршрутов: ' + (err.message || err));
+                } finally {
+                    setIsCalculatingRouteKm(false);
+                }
             };
 
             /* ── Генерация маршрутов-петель для пустых рабочих дней (OSRM / реальные дороги) ── */
@@ -3644,8 +3844,45 @@
                     </div>
 
                     {/* КАРТОЧКА 3: РАСПРЕДЕЛЕНИЕ НЕДОСТАЮЩЕГО ПРОБЕГА */}
-                    {missingKm > 0 && (
+                    {(missingKm > 0 || uncalculatedRouteDays.length > 0) && (
                         <div className={`rounded-lg border p-4 space-y-4 ${cardClass}`}>
+                            {/* Предупреждение и кнопка расчёта загруженных маршрутов */}
+                            {uncalculatedRouteDays.length > 0 && (
+                                <div className="p-3.5 rounded-lg border border-amber-500/50 bg-amber-500/10 text-amber-500 space-y-2.5">
+                                    <div className="flex items-start gap-2 text-xs">
+                                        <IconAlertTriangle size={18} className="flex-shrink-0 mt-0.5 text-amber-500" />
+                                        <div>
+                                            <span className="font-bold">
+                                                Есть реальные маршруты без пробега ({uncalculatedRouteDays.map(k => parseInt(k.split('-')[2], 10)).join(', ')})
+                                            </span>
+                                            <p className="opacity-90 mt-0.5">
+                                                Сначала рассчитайте их километраж, чтобы точно определить недостающий пробег.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        disabled={isCalculatingRouteKm}
+                                        onClick={calculateExistingRoutesKm}
+                                        className={`w-full min-h-[44px] flex items-center justify-center gap-2 rounded text-xs font-bold shadow transition-all ${
+                                            isCalculatingRouteKm ? 'opacity-70 cursor-wait bg-amber-600 text-white' : btnPrimary
+                                        }`}
+                                    >
+                                        {isCalculatingRouteKm ? (
+                                            <>
+                                                <span className="animate-spin inline-block mr-1">⏳</span>
+                                                Идёт расчёт дорожного пробега OSRM...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span>🗺</span>
+                                                Рассчитать пробег загруженных маршрутов
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            )}
+
                             <div>
                                 <p className={`text-xs font-bold mb-1 ${accentClass}`}>
                                     РАСПРЕДЕЛЕНИЕ НЕДОСТАЮЩЕГО ПРОБЕГА ({targetTotal} КМ)
@@ -4813,6 +5050,116 @@
                 }
             };
 
+            /* ── Загрузка конкретного месяца из Google Таблицы ── */
+            const loadMonthCloud = async (customKey) => {
+                const phone = normalizePhone(userPhone);
+                const pin = normalizePin(userPin);
+                const scriptUrl = settings.googleScriptUrl || DEFAULT_GOOGLE_SCRIPT_URL;
+                const mKey = customKey || currentMonthKey;
+                const [targetYear, targetMonth] = mKey.split('-').map(Number);
+                const monthTitle = `${MONTH_NAMES[targetMonth] || targetMonth} ${targetYear}`;
+
+                if (!isAuthVerified || !phone || phone.length !== 11 || !pin || pin.length !== 4 || !scriptUrl) {
+                    alert('Для загрузки данных из таблицы требуется авторизация (телефон и ПИН-код).');
+                    return false;
+                }
+
+                setCloudStatus('syncing');
+                setCloudErrorMsg('');
+
+                try {
+                    const res = await callGoogleScript(scriptUrl, 'loadUserData', { userId: phone, pin: pin });
+
+                    // Обработка ошибки неверного ПИНа
+                    if (res && (res.status === 'wrong_pin' || res.error === 'wrong_pin')) {
+                        setIsAuthVerified(false);
+                        localStorage.removeItem('expert_app_auth_verified');
+                        setAuthError('Неверный ПИН-код! Этот номер уже зарегистрирован другим пользователем.');
+                        setCloudStatus('error');
+                        setCloudErrorMsg('Неверный ПИН-код');
+                        return false;
+                    }
+
+                    let loadedMonths = {};
+                    if (res) {
+                        if (res.months && typeof res.months === 'object') loadedMonths = res.months;
+                        else if (res.data?.months && typeof res.data.months === 'object') loadedMonths = res.data.months;
+                    }
+
+                    let rawCloudMonth = loadedMonths[mKey] || loadedMonths[`${targetYear}-${targetMonth}`];
+                    if (typeof rawCloudMonth === 'string') {
+                        try {
+                            rawCloudMonth = JSON.parse(rawCloudMonth);
+                        } catch (e) {
+                            console.warn('Ошибка парсинга месяца из строки JSON:', e);
+                        }
+                    }
+
+                    if (!rawCloudMonth || typeof rawCloudMonth !== 'object') {
+                        setCloudStatus('saved');
+                        alert(`В Google Таблице нет сохранённых данных за ${monthTitle}`);
+                        return false;
+                    }
+
+                    // Подготавливаем загруженные данные месяца
+                    isHydratingRef.current = true;
+                    userChangedMonthRef.current = false;
+
+                    let cloudWd = rawCloudMonth.workdays || {};
+                    if (typeof cloudWd === 'string') {
+                        try { cloudWd = JSON.parse(cloudWd); } catch (e) {}
+                    }
+                    let cloudRefuels = rawCloudMonth.refuels || [];
+                    if (typeof cloudRefuels === 'string') {
+                        try { cloudRefuels = JSON.parse(cloudRefuels); } catch (e) {}
+                    }
+
+                    const activeSeason = rawCloudMonth.seasonOverride || getSeason(rawCloudMonth.year || targetYear, rawCloudMonth.month || targetMonth);
+                    const activeNorm = activeSeason === 'summer'
+                        ? (Number(profile.normSummer) || 0)
+                        : (Number(profile.normWinter) || 0);
+
+                    const recalced = recalcWorkdays(
+                        cloudWd,
+                        Number(rawCloudMonth.odometerStart) || 0,
+                        Number(rawCloudMonth.fuelStart) || 0,
+                        cloudRefuels,
+                        activeNorm
+                    );
+
+                    const updatedMonthData = {
+                        ...rawCloudMonth,
+                        year: rawCloudMonth.year || targetYear,
+                        month: rawCloudMonth.month || targetMonth,
+                        odometerStart: Number(rawCloudMonth.odometerStart) || 0,
+                        fuelStart: Number(rawCloudMonth.fuelStart) || 0,
+                        refuels: cloudRefuels,
+                        workdays: recalced
+                    };
+
+                    setMonths(prev => {
+                        const updated = { ...prev, [mKey]: updatedMonthData };
+                        localStorage.setItem('expert_report_months', JSON.stringify(updated));
+                        return updated;
+                    });
+
+                    setTimeout(() => {
+                        isHydratingRef.current = false;
+                    }, 500);
+
+                    setCloudStatus('saved');
+                    alert(`✓ Данные за ${monthTitle} загружены из Google Таблицы`);
+                    return true;
+                } catch (err) {
+                    console.error('Ошибка загрузки месяца из Google Таблицы:', err);
+                    setCloudStatus('error');
+                    setCloudErrorMsg(err.message || 'Ошибка загрузки месяца');
+                    alert('Ошибка загрузки данных из таблицы: ' + (err.message || err));
+                    isHydratingRef.current = false;
+                    return false;
+                }
+            };
+
             /* ── Сохранение месяца в Google Таблицу ── */
             const saveMonthCloud = async (customMonthData, customKey) => {
                 const phone = normalizePhone(userPhone);
@@ -5466,8 +5813,10 @@
                                         userChangedMonthRef.current = true;
                                         setMonths(updater);
                                     }}
+                                    onChangeMonthKey={(newYear, newMonth) => setCurrentMonthKey(`${newYear}-${String(newMonth).padStart(2, '0')}`)}
                                     onPullPrevMonth={(y, m) => applyPrevMonthBalances(y, m, true)}
                                     onSaveMonthCloud={() => saveMonthCloud(currentMonthData, currentMonthKey)}
+                                    onLoadMonthCloud={() => loadMonthCloud(currentMonthKey)}
                                     onExportExcel={() => exportReportToExcel(profile, currentMonthData)}
                                     cloudStatus={cloudStatus}
                                     userPhone={userPhone}
@@ -5484,6 +5833,7 @@
                                     allMonths={months}
                                     onApplyDistribution={handleApplyDistribution}
                                     onApplyRoutes={handleApplyRoutes}
+                                    onUpdateMonth={updateCurrentMonth}
                                     distanceCache={distanceCache}
                                     onUpdateDistanceCache={updateDistanceCache}
                                     settings={settings}
