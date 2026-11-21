@@ -90,10 +90,12 @@
         const APP_VERSION = '0.1.0';
         const DEFAULT_GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyTbFwjYlBPXp7n18cAIX_27z2TpuErD2-6F20J7v59YqaBCWY_8jZYl5KBKo4YV8Y/exec';
 
-        /* ── Адрес офиса и склада по умолчанию ── */
+        /* ── Адрес офиса и склада по умолчанию с точными координатами ── */
         const DEFAULT_OFFICE_ADDRESS = {
             address: 'г. Москва, ул. Бутырская, д. 62',
             note: 'Офис и склад',
+            lat: 55.8012,
+            lon: 37.5841,
             isDefault: true
         };
 
@@ -112,36 +114,127 @@
             return arr;
         };
 
-        /* Пул реалистичных адресов Москвы и МО с координатами для дорожного fallback */
+        /* Пул 80 реальных адресов Москвы и МО с точными координатами */
         const MOSCOW_MO_ADDRESS_POOL = [
+            // ЦАО
             { address: 'г. Москва, ул. Тверская, д. 22', lat: 55.7674, lon: 37.6009, area: 'ЦАО' },
+            { address: 'г. Москва, ул. Новый Арбат, д. 19', lat: 55.7525, lon: 37.5898, area: 'ЦАО' },
+            { address: 'г. Москва, ул. Большая Полянка, д. 28', lat: 55.7368, lon: 37.6185, area: 'ЦАО' },
+            { address: 'г. Москва, ул. Бауманская, д. 33', lat: 55.7724, lon: 37.6789, area: 'ЦАО' },
+            { address: 'г. Москва, ул. Красная Пресня, д. 24', lat: 55.7631, lon: 37.5672, area: 'ЦАО' },
+            { address: 'г. Москва, ул. Земляной Вал, д. 38', lat: 55.7538, lon: 37.6575, area: 'ЦАО' },
+            { address: 'г. Москва, Комсомольский пр-т, д. 28', lat: 55.7281, lon: 37.5812, area: 'ЦАО' },
+
+            // САО
             { address: 'г. Москва, Ленинградский пр-т, д. 36', lat: 55.7915, lon: 37.5542, area: 'САО' },
-            { address: 'г. Москва, пр-т Мира, д. 102', lat: 55.8082, lon: 37.6378, area: 'СВАО' },
-            { address: 'г. Москва, ул. Профсоюзная, д. 56', lat: 55.6669, lon: 37.5457, area: 'ЮЗАО' },
-            { address: 'г. Москва, Варшавское шоссе, д. 125', lat: 55.6264, lon: 37.6186, area: 'ЮАО' },
             { address: 'г. Москва, Дмитровское шоссе, д. 85', lat: 55.8561, lon: 37.5484, area: 'САО' },
+            { address: 'г. Москва, ул. Фестивальная, д. 13', lat: 55.8567, lon: 37.4812, area: 'САО' },
+            { address: 'г. Москва, Кронштадтский б-р, д. 7', lat: 55.8402, lon: 37.4891, area: 'САО' },
+            { address: 'г. Москва, Хорошёвское шоссе, д. 38', lat: 55.7761, lon: 37.5318, area: 'САО' },
+            { address: 'г. Москва, ул. Михалковская, д. 20', lat: 55.8364, lon: 37.5192, area: 'САО' },
+
+            // СВАО
+            { address: 'г. Москва, пр-т Мира, д. 102', lat: 55.8082, lon: 37.6378, area: 'СВАО' },
+            { address: 'г. Москва, Алтуфьевское шоссе, д. 48', lat: 55.8821, lon: 37.5878, area: 'СВАО' },
+            { address: 'г. Москва, ул. Декабристов, д. 12', lat: 55.8614, lon: 37.6041, area: 'СВАО' },
+            { address: 'г. Москва, Ярославское шоссе, д. 54', lat: 55.8672, lon: 37.6974, area: 'СВАО' },
+            { address: 'г. Москва, ул. Шереметьевская, д. 20', lat: 55.7984, lon: 37.6189, area: 'СВАО' },
+            { address: 'г. Москва, ул. Енисейская, д. 19', lat: 55.8631, lon: 37.6624, area: 'СВАО' },
+
+            // ВАО
             { address: 'г. Москва, шоссе Энтузиастов, д. 42', lat: 55.7578, lon: 37.7471, area: 'ВАО' },
-            { address: 'г. Москва, Кутузовский пр-т, д. 32', lat: 55.7417, lon: 37.5312, area: 'ЗАО' },
-            { address: 'г. Москва, ул. Люблинская, д. 141', lat: 55.6617, lon: 37.7371, area: 'ЮВАО' },
-            { address: 'г. Москва, проспект Вернадского, д. 29', lat: 55.6841, lon: 37.5144, area: 'ЮЗАО' },
             { address: 'г. Москва, Щёлковское шоссе, д. 75', lat: 55.8119, lon: 37.7854, area: 'ВАО' },
             { address: 'г. Москва, ул. Большая Семёновская, д. 40', lat: 55.7824, lon: 37.7188, area: 'ВАО' },
-            { address: 'г. Москва, Каширское шоссе, д. 61', lat: 55.6472, lon: 37.6853, area: 'ЮАО' },
-            { address: 'г. Москва, Алтуфьевское шоссе, д. 48', lat: 55.8821, lon: 37.5878, area: 'СВАО' },
+            { address: 'г. Москва, Зелёный пр-т, д. 62', lat: 55.7511, lon: 37.8182, area: 'ВАО' },
+            { address: 'г. Москва, ул. Первомайская, д. 42', lat: 55.7942, lon: 37.7891, area: 'ВАО' },
+            { address: 'г. Москва, ул. Стромынка, д. 18', lat: 55.7924, lon: 37.6985, area: 'ВАО' },
+
+            // ЮВАО
+            { address: 'г. Москва, ул. Люблинская, д. 141', lat: 55.6617, lon: 37.7371, area: 'ЮВАО' },
             { address: 'г. Москва, Рязанский пр-т, д. 24', lat: 55.7231, lon: 37.7654, area: 'ЮВАО' },
+            { address: 'г. Москва, Волгоградский пр-т, д. 42', lat: 55.7082, lon: 37.7264, area: 'ЮВАО' },
+            { address: 'г. Москва, ул. Братиславская, д. 18', lat: 55.6592, lon: 37.7548, area: 'ЮВАО' },
+            { address: 'г. Москва, ул. Привольная, д. 57', lat: 55.6881, lon: 37.8423, area: 'ЮВАО' },
+            { address: 'г. Москва, ул. Трофимова, д. 36', lat: 55.7051, lon: 37.6784, area: 'ЮВАО' },
+
+            // ЮАО
+            { address: 'г. Москва, Варшавское шоссе, д. 125', lat: 55.6264, lon: 37.6186, area: 'ЮАО' },
+            { address: 'г. Москва, Каширское шоссе, д. 61', lat: 55.6472, lon: 37.6853, area: 'ЮАО' },
+            { address: 'г. Москва, пр-т Андропова, д. 22', lat: 55.6842, lon: 37.6651, area: 'ЮАО' },
+            { address: 'г. Москва, ул. Кировоградская, д. 14', lat: 55.6174, lon: 37.6082, area: 'ЮАО' },
+            { address: 'г. Москва, ул. Шипиловская, д. 44', lat: 55.6192, lon: 37.7381, area: 'ЮАО' },
+            { address: 'г. Москва, ул. Автозаводская, д. 18', lat: 55.7042, lon: 37.6489, area: 'ЮАО' },
+
+            // ЮЗАО
+            { address: 'г. Москва, ул. Профсоюзная, д. 56', lat: 55.6669, lon: 37.5457, area: 'ЮЗАО' },
+            { address: 'г. Москва, проспект Вернадского, д. 29', lat: 55.6841, lon: 37.5144, area: 'ЮЗАО' },
+            { address: 'г. Москва, Ленинский пр-т, д. 90', lat: 55.6821, lon: 37.5284, area: 'ЮЗАО' },
+            { address: 'г. Москва, ул. Намёткина, д. 10', lat: 55.6612, lon: 37.5548, area: 'ЮЗАО' },
+            { address: 'г. Москва, ул. Теплый Стан, д. 15', lat: 55.6284, lon: 37.4981, area: 'ЮЗАО' },
+            { address: 'г. Москва, Новоясеневский пр-т, д. 11', lat: 55.6062, lon: 37.5341, area: 'ЮЗАО' },
+
+            // ЗАО
+            { address: 'г. Москва, Кутузовский пр-т, д. 32', lat: 55.7417, lon: 37.5312, area: 'ЗАО' },
             { address: 'г. Москва, Мичуринский пр-т, д. 16', lat: 55.7001, lon: 37.5023, area: 'ЗАО' },
+            { address: 'г. Москва, Можайское шоссе, д. 31', lat: 55.7194, lon: 37.4241, area: 'ЗАО' },
+            { address: 'г. Москва, Рублёвское шоссе, д. 48', lat: 55.7582, lon: 37.4098, area: 'ЗАО' },
+            { address: 'г. Москва, ул. Ярцевская, д. 25', lat: 55.7412, lon: 37.4148, area: 'ЗАО' },
+            { address: 'г. Москва, Озёрная ул., д. 42', lat: 55.6741, lon: 37.4589, area: 'ЗАО' },
+
+            // СЗАО
+            { address: 'г. Москва, Волоколамское шоссе, д. 73', lat: 55.8194, lon: 37.4612, area: 'СЗАО' },
+            { address: 'г. Москва, пр-т Маршала Жукова, д. 38', lat: 55.7774, lon: 37.4721, area: 'СЗАО' },
+            { address: 'г. Москва, ул. Свободы, д. 45', lat: 55.8521, lon: 37.4489, area: 'СЗАО' },
+            { address: 'г. Москва, ул. Планерная, д. 7', lat: 55.8612, lon: 37.4354, area: 'СЗАО' },
+            { address: 'г. Москва, Строгинский б-р, д. 14', lat: 55.8012, lon: 37.4021, area: 'СЗАО' },
+            { address: 'г. Москва, Пятницкое шоссе, д. 18', lat: 55.8451, lon: 37.3592, area: 'СЗАО' },
+
+            // ЗелАО
+            { address: 'г. Москва, г. Зеленоград, Панфиловский пр-т, д. 10', lat: 55.9967, lon: 37.1989, area: 'ЗелАО' },
+            { address: 'г. Москва, г. Зеленоград, Центральный пр-т, д. 1', lat: 55.9912, lon: 37.2142, area: 'ЗелАО' },
+
+            // НАО / ТАО
+            { address: 'г. Москва, п. Сосенское, п. Коммунарка, ул. Александры Монаховой, д. 10', lat: 55.5712, lon: 37.4812, area: 'НАО' },
+            { address: 'г. Москва, г. Московский, ул. Радужная, д. 8', lat: 55.5982, lon: 37.3512, area: 'НАО' },
+            { address: 'г. Москва, г. Троицк, Академическая площадь, д. 3', lat: 55.4851, lon: 37.3021, area: 'ТАО' },
+            { address: 'г. Москва, г. Щербинка, ул. Железнодорожная, д. 24', lat: 55.5081, lon: 37.5621, area: 'НАО' },
+
+            // Города ближнего МО
             { address: 'МО, г. Химки, ул. Ленинградская, д. 16', lat: 55.8924, lon: 37.4378, area: 'МО-Север' },
-            { address: 'МО, г. Мытищи, ул. Мира, д. 30', lat: 55.9145, lon: 37.7389, area: 'МО-Северо-Восток' },
-            { address: 'МО, г. Красногорск, ул. Ленина, д. 22', lat: 55.8289, lon: 37.3392, area: 'МО-Северо-Запад' },
-            { address: 'МО, г. Одинцово, Можайское шоссе, д. 71', lat: 55.6789, lon: 37.2845, area: 'МО-Запад' },
-            { address: 'МО, г. Люберцы, Октябрьский пр-т, д. 145', lat: 55.6823, lon: 37.8923, area: 'МО-Юго-Восток' },
-            { address: 'МО, г. Балашиха, шоссе Энтузиастов, д. 54', lat: 55.7994, lon: 37.9456, area: 'МО-Восток' },
-            { address: 'МО, г. Подольск, ул. Кирова, д. 38', lat: 55.4267, lon: 37.5389, area: 'МО-Юг' },
-            { address: 'МО, г. Видное, ул. Советская, д. 12', lat: 55.5512, lon: 37.7023, area: 'МО-Юг' },
-            { address: 'МО, г. Королёв, ул. Циолковского, д. 27', lat: 55.9189, lon: 37.8234, area: 'МО-Северо-Восток' },
             { address: 'МО, г. Долгопрудный, Лихачёвский пр-т, д. 8', lat: 55.9324, lon: 37.5089, area: 'МО-Север' },
-            { address: 'МО, г. Зеленоград, Панфиловский пр-т, д. 10', lat: 55.9967, lon: 37.1989, area: 'ЗелАО' }
+            { address: 'МО, г. Лобня, ул. Ленина, д. 19', lat: 56.0124, lon: 37.4721, area: 'МО-Север' },
+            { address: 'МО, г. Мытищи, ул. Мира, д. 30', lat: 55.9145, lon: 37.7389, area: 'МО-Северо-Восток' },
+            { address: 'МО, г. Королёв, ул. Циолковского, д. 27', lat: 55.9189, lon: 37.8234, area: 'МО-Северо-Восток' },
+            { address: 'МО, г. Пушкино, Московский пр-т, д. 20', lat: 56.0102, lon: 37.8512, area: 'МО-Северо-Восток' },
+            { address: 'МО, г. Щёлково, Пролетарский пр-т, д. 8', lat: 55.9231, lon: 37.9942, area: 'МО-Восток' },
+            { address: 'МО, г. Балашиха, шоссе Энтузиастов, д. 54', lat: 55.7994, lon: 37.9456, area: 'МО-Восток' },
+            { address: 'МО, г. Реутов, ул. Ленина, д. 12', lat: 55.7601, lon: 37.8612, area: 'МО-Восток' },
+            { address: 'МО, г. Люберцы, Октябрьский пр-т, д. 145', lat: 55.6823, lon: 37.8923, area: 'МО-Юго-Восток' },
+            { address: 'МО, г. Котельники, Новорязанское шоссе, д. 6', lat: 55.6612, lon: 37.8682, area: 'МО-Юго-Восток' },
+            { address: 'МО, г. Дзержинский, ул. Ленина, д. 15', lat: 55.6321, lon: 37.8491, area: 'МО-Юго-Восток' },
+            { address: 'МО, г. Видное, ул. Советская, д. 12', lat: 55.5512, lon: 37.7023, area: 'МО-Юг' },
+            { address: 'МО, г. Домодедово, Каширское шоссе, д. 49', lat: 55.4382, lon: 37.7681, area: 'МО-Юг' },
+            { address: 'МО, г. Подольск, ул. Кирова, д. 38', lat: 55.4267, lon: 37.5389, area: 'МО-Юг' },
+            { address: 'МО, г. Одинцово, Можайское шоссе, д. 71', lat: 55.6789, lon: 37.2845, area: 'МО-Запад' },
+            { address: 'МО, г. Красногорск, ул. Ленина, д. 22', lat: 55.8289, lon: 37.3392, area: 'МО-Северо-Запад' },
+            { address: 'МО, г. Раменское, ул. Михалевича, д. 26', lat: 55.5714, lon: 38.2321, area: 'МО-Юго-Восток' },
+            { address: 'МО, г. Жуковский, ул. Гагарина, д. 15', lat: 55.6012, lon: 38.1214, area: 'МО-Юго-Восток' }
         ];
+
+        /** Нормализация ключа геокэша */
+        const normalizeGeoKey = (addr) => String(addr || '').trim().toLowerCase().replace(/[\s\u00A0.,/\\-]/g, ' ');
+
+        /** Получение кэша координат из localStorage */
+        const getGeoCache = () => {
+            try { return JSON.parse(localStorage.getItem('expert_report_geo_cache') || '{}'); }
+            catch { return {}; }
+        };
+
+        /** Сохранение кэша координат в localStorage */
+        const saveGeoCache = (cache) => {
+            try { localStorage.setItem('expert_report_geo_cache', JSON.stringify(cache)); }
+            catch (e) {}
+        };
 
         /** Симметричный ключ кэша пары адресов (A-B == B-A) */
         const makeDistanceCacheKey = (addr1, addr2) => {
@@ -163,13 +256,16 @@
             return R * c;
         };
 
-        /** Поиск приблизительных координат адреса */
+        /** Поиск приблизительных координат адреса (офлайн-fallback) */
         const findApproxCoords = (addr) => {
             const str = String(addr || '').toLowerCase();
             if (str.includes('бутырская') || str.includes('склад') || str.includes('офис')) {
                 return { lat: 55.8012, lon: 37.5841 };
             }
-            const matchInPool = MOSCOW_MO_ADDRESS_POOL.find(p => str.includes(p.address.toLowerCase().split(',')[1]?.trim() || '---'));
+            const matchInPool = MOSCOW_MO_ADDRESS_POOL.find(p => {
+                const parts = p.address.toLowerCase().split(',');
+                return str.includes(parts[1]?.trim() || '---');
+            });
             if (matchInPool) return { lat: matchInPool.lat, lon: matchInPool.lon };
 
             if (str.includes('химки')) return { lat: 55.8924, lon: 37.4378 };
@@ -192,7 +288,142 @@
             return { lat: 55.7512 + latOffset, lon: 37.6184 + lonOffset };
         };
 
-        /** Оценка дорожного расстояния между двумя адресами (с коэффициентом извилистости дорог 1.35) */
+        /** Асинхронное геокодирование адреса: кэш -> пул/офис -> Яндекс -> Nominatim -> fallback */
+        const geocodeAddress = async (address, yandexApiKey) => {
+            const raw = String(address || '').trim();
+            if (!raw) return null;
+            const key = normalizeGeoKey(raw);
+            const cache = getGeoCache();
+            if (cache[key] && typeof cache[key].lat === 'number' && typeof cache[key].lon === 'number') {
+                return cache[key];
+            }
+
+            // 1. Поиск в офисе по умолчанию
+            const cleanOffice = normalizeGeoKey(DEFAULT_OFFICE_ADDRESS.address);
+            if (key === cleanOffice || key.includes('бутырская') || key.includes('склад') || key.includes('офис')) {
+                const res = { lat: DEFAULT_OFFICE_ADDRESS.lat, lon: DEFAULT_OFFICE_ADDRESS.lon };
+                cache[key] = res;
+                saveGeoCache(cache);
+                return res;
+            }
+
+            // 2. Поиск в пуле MOSCOW_MO_ADDRESS_POOL
+            const matchInPool = MOSCOW_MO_ADDRESS_POOL.find(p => {
+                const pk = normalizeGeoKey(p.address);
+                return pk === key || key.includes(pk) || pk.includes(key);
+            });
+            if (matchInPool) {
+                const res = { lat: matchInPool.lat, lon: matchInPool.lon };
+                cache[key] = res;
+                saveGeoCache(cache);
+                return res;
+            }
+
+            // 3. Запрос к Яндекс Геокодеру (если задан API-ключ) с таймаутом 3 сек через AbortController
+            if (yandexApiKey && String(yandexApiKey).trim().length > 5) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 3000);
+                    const url = `https://geocode-maps.yandex.ru/1.x/?apikey=${encodeURIComponent(yandexApiKey.trim())}&format=json&geocode=${encodeURIComponent(raw)}&results=1`;
+                    const resp = await fetch(url, { signal: controller.signal });
+                    clearTimeout(timeoutId);
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        const member = data?.response?.GeoObjectCollection?.featureMember?.[0];
+                        const pos = member?.GeoObject?.Point?.pos;
+                        if (pos) {
+                            const [lonStr, latStr] = pos.split(' ');
+                            const lat = parseFloat(latStr);
+                            const lon = parseFloat(lonStr);
+                            if (!isNaN(lat) && !isNaN(lon)) {
+                                const res = { lat, lon };
+                                cache[key] = res;
+                                saveGeoCache(cache);
+                                return res;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Яндекс Геокодер таймаут или недоступен:', e.message);
+                }
+            }
+
+            // 4. Запрос к Nominatim OSM с таймаутом 3 сек через AbortController
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
+                const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ru&q=${encodeURIComponent(raw)}`;
+                const resp = await fetch(url, {
+                    headers: { 'Accept-Language': 'ru' },
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (Array.isArray(data) && data.length > 0) {
+                        const lat = parseFloat(data[0].lat);
+                        const lon = parseFloat(data[0].lon);
+                        if (!isNaN(lat) && !isNaN(lon)) {
+                            const res = { lat, lon };
+                            cache[key] = res;
+                            saveGeoCache(cache);
+                            return res;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Nominatim таймаут или недоступен:', e.message);
+            }
+
+            // 5. Детерминированный fallback
+            const approx = findApproxCoords(raw);
+            cache[key] = approx;
+            saveGeoCache(cache);
+            return approx;
+        };
+
+        /** Пакетный расчёт реальной дорожной петли через OSRM: Старт -> точки -> Финиш */
+        const fetchOsrmLoop = async (coordsList) => {
+            if (!Array.isArray(coordsList) || coordsList.length < 2) {
+                return { success: false, totalKm: 0, legs: [], isOffline: true };
+            }
+
+            // Координаты для OSRM: lon,lat;lon,lat;...
+            const coordsStr = coordsList.map(c => `${c.lon.toFixed(5)},${c.lat.toFixed(5)}`).join(';');
+            const url = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=false`;
+
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3500);
+                const resp = await fetch(url, { signal: controller.signal });
+                clearTimeout(timeoutId);
+
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data && data.code === 'Ok' && Array.isArray(data.routes) && data.routes.length > 0) {
+                        const r = data.routes[0];
+                        const totalKm = Math.round((r.distance / 1000) * 10) / 10;
+                        const legs = (r.legs || []).map(l => Math.round((l.distance / 1000) * 10) / 10);
+                        return { success: true, totalKm, legs, isOffline: false };
+                    }
+                }
+            } catch (e) {
+                console.warn('OSRM сервис недоступен или таймаут, переключаемся на офлайн-расчёт:', e.message);
+            }
+
+            // Офлайн-расчёт по координатам Haversine * 1.32
+            const legs = [];
+            for (let i = 0; i < coordsList.length - 1; i++) {
+                const c1 = coordsList[i];
+                const c2 = coordsList[i + 1];
+                const geo = haversineDistance(c1.lat, c1.lon, c2.lat, c2.lon);
+                legs.push(Math.max(1.0, Math.round(geo * 1.32 * 10) / 10));
+            }
+            const totalKm = Math.round(legs.reduce((s, v) => s + v, 0) * 10) / 10;
+            return { success: false, totalKm, legs, isOffline: true };
+        };
+
+        /** Оценка дорожного расстояния между двумя адресами (с коэффициентом 1.32) */
         const estimateRoadDistanceKm = (addr1, addr2) => {
             const clean1 = String(addr1 || '').trim().toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
             const clean2 = String(addr2 || '').trim().toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
@@ -201,7 +432,7 @@
             const c1 = findApproxCoords(addr1);
             const c2 = findApproxCoords(addr2);
             const geo = haversineDistance(c1.lat, c1.lon, c2.lat, c2.lon);
-            return Math.max(3.0, Math.round(geo * 1.35 * 10) / 10);
+            return Math.max(3.0, Math.round(geo * 1.32 * 10) / 10);
         };
 
         /* ═══════════════════════════════════════════════════
@@ -2304,6 +2535,8 @@
             const [fitRoutesToMonthlyOdometer, setFitRoutesToMonthlyOdometer] = useState(true);
             const [routePreviewMap, setRoutePreviewMap] = useState(null);
             const [isGeneratingRoutes, setIsGeneratingRoutes] = useState(false);
+            const [generationProgress, setGenerationProgress] = useState('');
+            const [hasAnyOsrmRoutes, setHasAnyOsrmRoutes] = useState(false);
 
             const odometerStart = Number(monthData.odometerStart) || 0;
             const fuelStart     = Number(monthData.fuelStart) || 0;
@@ -2767,8 +3000,8 @@
                 onUpdateAddresses(updated, true);
             };
 
-            /* ── Генерация маршрутов-петель для пустых рабочих дней ── */
-            const handleGenerateRoutes = () => {
+            /* ── Генерация маршрутов-петель для пустых рабочих дней (OSRM / реальные дороги) ── */
+            const handleGenerateRoutes = async () => {
                 const startPoint = (profile?.startPoint || '').trim();
                 if (!startPoint) {
                     alert('Пожалуйста, укажите домашний адрес (Точку старта) во вкладке «Профиль» (Карточка сотрудника)!');
@@ -2794,39 +3027,95 @@
                 }
 
                 setIsGeneratingRoutes(true);
+                setGenerationProgress('Геокодирование точки старта и адресов...');
 
                 try {
-                    const cleanStart = startPoint.toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
-                    const cleanOffice = DEFAULT_OFFICE_ADDRESS.address.toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
+                    const yandexKey = settings?.yandexApiKey || '';
+                    const cleanStart = normalizeGeoKey(startPoint);
+                    const cleanOffice = normalizeGeoKey(DEFAULT_OFFICE_ADDRESS.address);
 
-                    // Пул пользовательских адресов (без старта и без офиса)
-                    const userPool = (addresses || []).filter(a => {
-                        const ca = (a.address || '').toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
-                        return ca && ca !== cleanStart && ca !== cleanOffice;
-                    }).map(a => a.address);
+                    // 1. Геокодируем точку старта
+                    const startCoords = await geocodeAddress(startPoint, yandexKey);
 
-                    // Пул стандартных адресов Москвы и МО (без старта и без офиса)
-                    const moPool = (MOSCOW_MO_ADDRESS_POOL || []).filter(a => {
-                        const ca = (a.address || '').toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
-                        return ca && ca !== cleanStart && ca !== cleanOffice;
-                    }).map(a => a.address);
+                    // 2. Геокодируем адреса из личного справочника (с вежливой паузой 250 мс для внешних запросов)
+                    const userAddressesWithCoords = [];
+                    const initialCache = getGeoCache();
+                    for (const item of (addresses || [])) {
+                        const rawAddr = (item.address || '').trim();
+                        if (!rawAddr) continue;
+                        const k = normalizeGeoKey(rawAddr);
+                        const isAlreadyCached = !!initialCache[k];
+                        const c = await geocodeAddress(rawAddr, yandexKey);
+                        if (!isAlreadyCached) {
+                            await new Promise(r => setTimeout(r, 250));
+                        }
+                        if (c) {
+                            userAddressesWithCoords.push({ address: rawAddr, note: item.note || '', lat: c.lat, lon: c.lon });
+                        }
+                    }
 
-                    // Объединённый пул уникальных адресов
-                    const fullPool = Array.from(new Set([...userPool, ...moPool]));
-                    if (fullPool.length === 0) {
-                        fullPool.push('г. Москва, ул. Тверская, д. 13', 'г. Москва, пр-т Мира, д. 119');
+                    // 3. Собираем адреса, уже занятые в загруженных из CSV днях текущего месяца
+                    const usedInMonth = new Set();
+                    workdayKeys.forEach(k => {
+                        const dayObj = workdays[k];
+                        (dayObj?.trips || []).forEach(t => {
+                            if (t.address) usedInMonth.add(normalizeGeoKey(t.address));
+                        });
+                    });
+                    // Исключаем старт и офис из пула обычных клиентов
+                    usedInMonth.add(cleanStart);
+                    usedInMonth.add(cleanOffice);
+
+                    // 4. Формируем колоду доступных адресов без повторов
+                    const availableUser = userAddressesWithCoords
+                        .filter(a => {
+                            const k = normalizeGeoKey(a.address);
+                            return k && k !== cleanStart && k !== cleanOffice && !usedInMonth.has(k);
+                        })
+                        .sort(() => 0.5 - Math.random());
+
+                    const availablePool = MOSCOW_MO_ADDRESS_POOL
+                        .filter(a => {
+                            const k = normalizeGeoKey(a.address);
+                            return k && k !== cleanStart && k !== cleanOffice && !usedInMonth.has(k);
+                        })
+                        .sort(() => 0.5 - Math.random());
+
+                    let availableDeck = [...availableUser, ...availablePool];
+                    if (availableDeck.length === 0) {
+                        // Если все адреса заняты, повторно открываем пул Москвы и МО
+                        availableDeck = [...MOSCOW_MO_ADDRESS_POOL.filter(a => normalizeGeoKey(a.address) !== cleanStart)];
                     }
 
                     const newPreview = {};
                     const newCacheEntries = {};
                     let lastOfficeDayIndex = -99;
-                    const taskTypeVariants = ['Осмотр ТС', 'Осмотр ТС', 'Осмотр объекта', 'Экспертиза'];
                     let carryDelta = 0;
+                    let anyOsrm = false;
+
+                    // Быстрая вспомогательная оценка протяжённости цепочки по координатам Haversine * 1.32
+                    const estimateCoordsLoopKm = (pts) => {
+                        const coords = [startCoords, ...pts, startCoords];
+                        let sum = 0;
+                        for (let i = 0; i < coords.length - 1; i++) {
+                            sum += haversineDistance(coords[i].lat, coords[i].lon, coords[i + 1].lat, coords[i + 1].lon) * 1.32;
+                        }
+                        return Math.round(sum * 10) / 10;
+                    };
 
                     for (let dayIdx = 0; dayIdx < eligibleDayKeys.length; dayIdx++) {
                         const dateKey = eligibleDayKeys[dayIdx];
                         const dayObj = workdays[dateKey];
                         const plannedDayKm = Number(dayObj?.tripKm) || 0;
+
+                        setGenerationProgress(`Подбор маршрутов: день ${dayIdx + 1} из ${eligibleDayKeys.length}...`);
+
+                        // Ограничение переноса невязки: не более ±20% от планового километража дня (и не более 190 км/день)
+                        const maxDeltaAllowed = Math.round(plannedDayKm * 0.20 * 10) / 10;
+                        const clampedDelta = Math.max(-maxDeltaAllowed, Math.min(maxDeltaAllowed, carryDelta));
+                        const targetKmForDay = fitRoutesToMonthlyOdometer
+                            ? Math.min(190, Math.max(20, Math.round((plannedDayKm + clampedDelta) * 10) / 10))
+                            : plannedDayKm;
 
                         // Включение заезда в офис/склад (~30–35% дней, не подряд)
                         let includeOffice = false;
@@ -2838,106 +3127,85 @@
                             }
                         }
 
-                        // Оценка целевого километража для выбора количества точек (с учётом накопленной дельты)
-                        const baseKmForPoints = fitRoutesToMonthlyOdometer
-                            ? Math.max(10, plannedDayKm + carryDelta)
-                            : plannedDayKm;
+                        // Количество промежуточных точек (2–5) в зависимости от целевого километража
+                        let pointsCount = 2;
+                        if (targetKmForDay >= 160) pointsCount = Math.random() < 0.5 ? 4 : 5;
+                        else if (targetKmForDay >= 110) pointsCount = Math.random() < 0.5 ? 3 : 4;
+                        else if (targetKmForDay >= 65) pointsCount = Math.random() < 0.5 ? 2 : 3;
+                        else pointsCount = 2;
 
-                        let targetPointsCount = 2;
-                        if (baseKmForPoints >= 160) {
-                            targetPointsCount = Math.random() < 0.5 ? 4 : 5;
-                        } else if (baseKmForPoints >= 110) {
-                            targetPointsCount = Math.random() < 0.5 ? 3 : 4;
-                        } else if (baseKmForPoints >= 65) {
-                            targetPointsCount = Math.random() < 0.5 ? 2 : 3;
-                        } else {
-                            targetPointsCount = 2;
+                        const otherPointsNeeded = includeOffice ? Math.max(1, pointsCount - 1) : pointsCount;
+
+                        // Если в колоде мало адресов, пополняем её из пула Москвы и МО
+                        if (availableDeck.length < otherPointsNeeded) {
+                            const refill = [...MOSCOW_MO_ADDRESS_POOL.filter(a => normalizeGeoKey(a.address) !== cleanStart)]
+                                .sort(() => 0.5 - Math.random());
+                            availableDeck = [...availableDeck, ...refill];
                         }
 
-                        const otherPointsNeeded = includeOffice ? Math.max(1, targetPointsCount - 1) : targetPointsCount;
+                        // 5. Перебор до 25 комбинаций в памяти: выбираем петлю с минимальным отклонением от targetKmForDay
+                        let bestCombo = null;
+                        let bestDiff = Infinity;
+                        const attempts = Math.min(25, Math.max(8, availableDeck.length));
 
-                        // Перемешиваем пул и выбираем адреса
-                        const shuffled = [...fullPool].sort(() => 0.5 - Math.random());
-                        const pickedOthers = shuffled.slice(0, Math.min(otherPointsNeeded, shuffled.length));
-
-                        // Формируем промежуточные адреса
-                        let intermediateAddrs = [];
-                        if (includeOffice) {
-                            if (Math.random() < 0.5) {
-                                intermediateAddrs = [DEFAULT_OFFICE_ADDRESS.address, ...pickedOthers];
+                        for (let a = 0; a < attempts; a++) {
+                            const shuffledSlice = [...availableDeck].sort(() => 0.5 - Math.random()).slice(0, otherPointsNeeded);
+                            let candidateList = [];
+                            if (includeOffice) {
+                                if (Math.random() < 0.5) candidateList = [DEFAULT_OFFICE_ADDRESS, ...shuffledSlice];
+                                else candidateList = [...shuffledSlice, DEFAULT_OFFICE_ADDRESS];
                             } else {
-                                intermediateAddrs = [...pickedOthers, DEFAULT_OFFICE_ADDRESS.address];
+                                candidateList = shuffledSlice;
                             }
-                        } else {
-                            intermediateAddrs = pickedOthers;
-                        }
 
-                        // Цепочка петли: Старт -> Точка 1 -> ... -> Точка N -> Финиш (Старт)
-                        const chain = [startPoint, ...intermediateAddrs, startPoint];
-
-                        // Расчёт дорожных расстояний плеч
-                        const rawLegs = [];
-                        for (let legIdx = 0; legIdx < chain.length - 1; legIdx++) {
-                            const fromA = chain[legIdx];
-                            const toA = chain[legIdx + 1];
-                            const cKey = makeDistanceCacheKey(fromA, toA);
-                            let legKm = distanceCache[cKey] || newCacheEntries[cKey];
-                            if (!legKm) {
-                                legKm = estimateRoadDistanceKm(fromA, toA);
-                                newCacheEntries[cKey] = legKm;
-                            }
-                            rawLegs.push(legKm);
-                        }
-
-                        const rawSum = Math.round(rawLegs.reduce((s, v) => s + v, 0) * 10) / 10;
-                        let actualDayKm = plannedDayKm;
-                        let scaledLegs = [];
-
-                        if (fitRoutesToMonthlyOdometer) {
-                            const isLastDay = (dayIdx === eligibleDayKeys.length - 1);
-                            if (!isLastDay) {
-                                actualDayKm = rawSum;
-                                const diff = plannedDayKm - actualDayKm;
-                                carryDelta += diff;
-                                scaledLegs = [...rawLegs];
-                            } else {
-                                // Последний рабочий день компенсирует накопленную дельту для 100% схождения с месячным одометром
-                                actualDayKm = Math.max(10, Math.round((plannedDayKm + carryDelta) * 10) / 10);
-                                const factor = actualDayKm / (rawSum || 1);
-                                scaledLegs = rawLegs.map(l => Math.max(1.0, Math.round(l * factor * 10) / 10));
-
-                                const sumScaled = Math.round(scaledLegs.reduce((s, v) => s + v, 0) * 10) / 10;
-                                const roundDiff = Math.round((actualDayKm - sumScaled) * 10) / 10;
-                                if (Math.abs(roundDiff) > 0.001) {
-                                    let maxLegIdx = 0;
-                                    for (let li = 1; li < scaledLegs.length; li++) {
-                                        if (scaledLegs[li] > scaledLegs[maxLegIdx]) maxLegIdx = li;
-                                    }
-                                    scaledLegs[maxLegIdx] = Math.max(1.0, Math.round((scaledLegs[maxLegIdx] + roundDiff) * 10) / 10);
-                                }
-                                carryDelta = 0;
-                            }
-                        } else {
-                            // Без подгонки: плечи строго масштабируются под плановый пробег дня
-                            actualDayKm = plannedDayKm;
-                            const factor = plannedDayKm / (rawSum || 1);
-                            scaledLegs = rawLegs.map(l => Math.max(1.0, Math.round(l * factor * 10) / 10));
-
-                            const sumScaled = Math.round(scaledLegs.reduce((s, v) => s + v, 0) * 10) / 10;
-                            const diff = Math.round((plannedDayKm - sumScaled) * 10) / 10;
-                            if (Math.abs(diff) > 0.001) {
-                                let maxLegIdx = 0;
-                                for (let li = 1; li < scaledLegs.length; li++) {
-                                    if (scaledLegs[li] > scaledLegs[maxLegIdx]) maxLegIdx = li;
-                                }
-                                scaledLegs[maxLegIdx] = Math.max(1.0, Math.round((scaledLegs[maxLegIdx] + diff) * 10) / 10);
+                            const estKm = estimateCoordsLoopKm(candidateList);
+                            const diff = Math.abs(estKm - targetKmForDay);
+                            if (diff < bestDiff) {
+                                bestDiff = diff;
+                                bestCombo = candidateList;
                             }
                         }
 
-                        // Формируем промежуточные точки маршрута
+                        if (!bestCombo || bestCombo.length === 0) {
+                            bestCombo = availableDeck.slice(0, otherPointsNeeded);
+                        }
+
+                        // Фиксируем выбранные адреса клиентов в usedInMonth и удаляем их из свободной колоды
+                        bestCombo.forEach(pt => {
+                            const k = normalizeGeoKey(pt.address);
+                            if (k !== cleanOffice && k !== cleanStart) {
+                                usedInMonth.add(k);
+                            }
+                        });
+                        availableDeck = availableDeck.filter(a => !usedInMonth.has(normalizeGeoKey(a.address)));
+
+                        // 6. Реальный расчёт выбранной дорожной петли через OSRM (ровно 1 запрос на день!)
+                        const loopCoords = [startCoords, ...bestCombo.map(p => ({ lat: p.lat, lon: p.lon })), startCoords];
+                        const osrmResult = await fetchOsrmLoop(loopCoords);
+                        if (!osrmResult.isOffline) {
+                            anyOsrm = true;
+                        }
+
+                        const actualDayKm = osrmResult.totalKm;
+                        const legsKm = osrmResult.legs || [];
+
+                        // Сохраняем пары плеч в кэш расстояний
+                        const fullAddrs = [startPoint, ...bestCombo.map(p => p.address), startPoint];
+                        for (let li = 0; li < fullAddrs.length - 1; li++) {
+                            const cKey = makeDistanceCacheKey(fullAddrs[li], fullAddrs[li + 1]);
+                            const legDist = legsKm[li] || 0;
+                            if (legDist > 0) newCacheEntries[cKey] = legDist;
+                        }
+
+                        // Накапливаем разницу между плановым и фактическим пробегом
+                        const dayDiff = plannedDayKm - actualDayKm;
+                        carryDelta += dayDiff;
+
+                        // 7. Формируем промежуточные точки маршрута (чистые метки: taskType только для офиса/склада)
+                        const intermediateAddrs = bestCombo.map(p => p.address);
                         const dayTrips = intermediateAddrs.map((addr, idx) => {
-                            const isOffice = addr === DEFAULT_OFFICE_ADDRESS.address;
-                            const taskType = isOffice ? 'Офис и склад' : taskTypeVariants[idx % taskTypeVariants.length];
+                            const isOffice = normalizeGeoKey(addr) === cleanOffice;
+                            const taskType = isOffice ? 'Офис и склад' : '';
                             const hour = 9 + Math.floor(idx * 2);
                             const minute = (idx % 2 === 0) ? '00' : '30';
                             return {
@@ -2945,7 +3213,7 @@
                                 address: addr,
                                 taskType: taskType,
                                 time: `${String(hour).padStart(2, '0')}:${minute}`,
-                                distanceKm: scaledLegs[idx]
+                                distanceKm: legsKm[idx] || 0
                             };
                         });
 
@@ -2955,26 +3223,29 @@
                             actualKm: actualDayKm,
                             intermediateAddrs,
                             trips: dayTrips,
-                            chain,
-                            scaledLegs,
+                            chain: fullAddrs,
+                            scaledLegs: legsKm,
                             hasOffice: includeOffice,
-                            fitApplied: fitRoutesToMonthlyOdometer
+                            fitApplied: fitRoutesToMonthlyOdometer,
+                            isOffline: osrmResult.isOffline
                         };
                     }
 
-                    // Обновляем кэш расстояний новыми парами
+                    // Обновляем кэш расстояний новыми вычисленными парами
                     if (Object.keys(newCacheEntries).length > 0 && onUpdateDistanceCache) {
                         Object.entries(newCacheEntries).forEach(([k, v]) => {
                             onUpdateDistanceCache(k, v);
                         });
                     }
 
+                    setHasAnyOsrmRoutes(anyOsrm);
                     setRoutePreviewMap(newPreview);
                 } catch (err) {
                     console.error('Ошибка подбора маршрутов:', err);
                     alert('Ошибка подбора маршрутов: ' + err.message);
                 } finally {
                     setIsGeneratingRoutes(false);
+                    setGenerationProgress('');
                 }
             };
 
@@ -3551,7 +3822,7 @@
                             className={`w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold shadow-md transition-transform active:scale-[0.99] ${btnPrimary}`}
                         >
                             <IconMapPin size={18} />
-                            {isGeneratingRoutes ? 'Подбираем маршруты-петли...' : '🗺 Подобрать маршруты-петли для рабочих дней'}
+                            {isGeneratingRoutes ? (generationProgress || 'Подбираем маршруты-петли...') : '🗺 Подобрать маршруты-петли для рабочих дней'}
                         </button>
 
                         {/* Блок предпросмотра сгенерированных маршрутов */}
@@ -3570,10 +3841,21 @@
 
                             return (
                                 <div className="mt-4 space-y-3 animate-fade-in">
-                                    <div className="flex items-center justify-between">
-                                        <p className="text-xs font-bold opacity-80">
-                                            Предпросмотр маршрутов ({totalPreviewDays} дн., {totalPreviewPoints} точек):
-                                        </p>
+                                    <div className="flex items-center justify-between flex-wrap gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-xs font-bold opacity-80">
+                                                Предпросмотр маршрутов ({totalPreviewDays} дн., {totalPreviewPoints} точек):
+                                            </p>
+                                            {hasAnyOsrmRoutes ? (
+                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                                    🗺 Реальные дороги (OSRM)
+                                                </span>
+                                            ) : (
+                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-500 border border-amber-500/30">
+                                                    ⚡ Офлайн-оценка
+                                                </span>
+                                            )}
+                                        </div>
                                         <button
                                             type="button"
                                             onClick={() => setRoutePreviewMap(null)}
