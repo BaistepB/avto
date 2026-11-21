@@ -1427,9 +1427,46 @@
         };
 
         /* ═══════════════════════════════════════════════════
+           7.5. ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ: ЗАГРУЗКА ШАБЛОНА .xlsx
+        ═══════════════════════════════════════════════════ */
+        const loadTemplateBuffer = async (templateBufferRef) => {
+            if (templateBufferRef && templateBufferRef.current) {
+                return templateBufferRef.current;
+            }
+            try {
+                const ctrl = new AbortController();
+                const timer = setTimeout(() => ctrl.abort(), 5000);
+                const resp = await fetch('./template.xlsx', { signal: ctrl.signal });
+                clearTimeout(timer);
+                if (resp.ok) {
+                    const buf = await resp.arrayBuffer();
+                    if (templateBufferRef) templateBufferRef.current = buf;
+                    return buf;
+                }
+            } catch {}
+            return new Promise((resolve, reject) => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.xlsx';
+                input.style.display = 'none';
+                document.body.appendChild(input);
+                input.onchange = async (e) => {
+                    document.body.removeChild(input);
+                    const file = e.target.files && e.target.files[0];
+                    if (!file) { reject(new Error('Файл не выбран')); return; }
+                    const buf = await file.arrayBuffer();
+                    if (templateBufferRef) templateBufferRef.current = buf;
+                    resolve(buf);
+                };
+                input.oncancel = () => { try { document.body.removeChild(input); } catch {} reject(new Error('Отменено')); };
+                input.click();
+            });
+        };
+
+        /* ═══════════════════════════════════════════════════
            8. КОМПОНЕНТ: НАСТРОЙКА МЕСЯЦА + РАБОЧИЕ ДНИ
         ═══════════════════════════════════════════════════ */
-        const MonthSetup = ({ monthData, profile, onUpdate, allMonths, onUpdateAllMonths, onPullPrevMonth, onSaveMonthCloud, cloudStatus, userPhone, t }) => {
+        const MonthSetup = ({ monthData, profile, onUpdate, allMonths, onUpdateAllMonths, onPullPrevMonth, onSaveMonthCloud, onExportExcel, cloudStatus, userPhone, t }) => {
 
             const year  = monthData.year;
             const month = monthData.month;
@@ -2487,14 +2524,14 @@
                         <span>{cloudStatus === 'syncing' ? 'Сохранение месяца в Google Таблицу...' : 'Сохранить месяц в Google Таблицу'}</span>
                     </button>
 
-                    {/* ── Кнопка «Скачать отчёт» (Этап 2) ── */}
+                    {/* ── Кнопка «Скачать отчёт» ── */}
                     <button
-                        disabled
-                        className="w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold opacity-40 cursor-not-allowed bg-gray-400 text-white"
-                        title="Экспорт в xlsx будет доступен на Этапе 2"
+                        onClick={() => onExportExcel && onExportExcel()}
+                        className="w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold bg-green-600 hover:bg-green-700 active:bg-green-800 text-white transition-colors"
+                        title="Скачать отчёт в формате .xlsx"
                     >
                         <IconDownload size={18} />
-                        Скачать отчёт (.xlsx) — доступно на Этапе 2
+                        Скачать отчёт (.xlsx)
                     </button>
                 </div>
             );
@@ -2516,6 +2553,7 @@
             onUpdateDistanceCache,
             settings = {},
             cloudStatus,
+            onExportExcel,
             userPhone,
             t
         }) => {
@@ -3960,14 +3998,14 @@
                         })()}
                     </div>
 
-                    {/* Заглушка скачивания отчёта Этапа 2 */}
+                    {/* Скачивание отчёта */}
                     <div className="pt-2">
                         <button
-                            disabled
-                            className="w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold opacity-40 cursor-not-allowed bg-gray-400 text-white"
+                            onClick={() => onExportExcel && onExportExcel()}
+                            className="w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold bg-green-600 hover:bg-green-700 active:bg-green-800 text-white transition-colors"
                         >
                             <IconDownload size={18} />
-                            Сформировать и скачать отчёт — Этап 2
+                            Сформировать и скачать отчёт (.xlsx)
                         </button>
                     </div>
                 </div>
@@ -4539,6 +4577,9 @@
             const profileDebounceRef = useRef(null);
             const monthDebounceRef = useRef(null);
             const addressesDebounceRef = useRef(null);
+            const templateBufferRef = useRef(null);
+
+            const [isExporting, setIsExporting] = useState(false);
 
             /* ── Текущий месяц по умолчанию — сегодня ── */
             const now = new Date();
@@ -5018,6 +5059,148 @@
                 alert(`✓ Успешно заполнено ${totalTripsCount} точек маршрута в ${daysUpdated} рабочих днях месяца! Цепочка одометров пересчитана.`);
             };
 
+            /* ── Экспорт отчёта в .xlsx по шаблону template.xlsx ── */
+            const exportReportToExcel = async (exportProfile, exportMonthData) => {
+                if (isExporting) return;
+                if (typeof ExcelJS === 'undefined') {
+                    alert('Ошибка: библиотека ExcelJS не загружена. Проверьте подключение к интернету.');
+                    return;
+                }
+                setIsExporting(true);
+                try {
+                    const buf = await loadTemplateBuffer(templateBufferRef);
+                    const wb = new ExcelJS.Workbook();
+                    await wb.xlsx.load(buf);
+                    wb.calcProperties.fullCalcOnLoad = true;
+
+                    const p = exportProfile || profile;
+                    const mData = exportMonthData || currentMonthData;
+                    const year = mData.year;
+                    const month = mData.month;
+                    const activeSeason = mData.seasonOverride || getSeason(year, month);
+                    const activeNorm = activeSeason === 'summer'
+                        ? (Number(p.normSummer) || 0)
+                        : (Number(p.normWinter) || 0);
+                    const totalDays = daysInMonth(year, month);
+
+                    /* ── 1. Лист «Карточка сотрудника» ── */
+                    const wsCard = wb.getWorksheet('Карточка сотрудника');
+                    if (wsCard) {
+                        wsCard.getCell('C2').value = p.fullName || '';
+                        wsCard.getCell('C3').value = p.position || '';
+                        wsCard.getCell('C4').value = p.organization || '';
+                        wsCard.getCell('C5').value = Number(p.normSummer) || 0;
+                        wsCard.getCell('C6').value = Number(p.normWinter) || 0;
+                        wsCard.getCell('C8').value = p.carBrand || '';
+                        wsCard.getCell('C9').value = p.carPlate || '';
+                        wsCard.getCell('C10').value = p.driverLicense || '';
+                        wsCard.getCell('C11').value = p.fuelType || '';
+                    }
+
+                    /* ── 2. Лист «Расчет» ── */
+                    const wsCalc = wb.getWorksheet('Расчет');
+                    if (wsCalc) {
+                        wsCalc.getCell('J2').value = activeNorm;
+                        wsCalc.getCell('F5').value = Number(mData.fuelStart) || 0;
+
+                        // Даты B5:B35 — значения (не формулы)
+                        for (let d = 1; d <= 31; d++) {
+                            const row = d + 4;
+                            const bCell = wsCalc.getCell(`B${row}`);
+                            if (d <= totalDays) {
+                                bCell.value = new Date(Date.UTC(year, month - 1, d));
+                            } else {
+                                bCell.value = null;
+                            }
+                        }
+
+                        // Одометр и заправки: только рабочие дни
+                        let currentOdo = Number(mData.odometerStart) || 0;
+                        for (let d = 1; d <= 31; d++) {
+                            const row = d + 4;
+                            const dateKey = toDateStr(year, month, d);
+                            const dayObj = (mData.workdays || {})[dateKey];
+                            const isWorking = dayObj && dayObj.isWorkday && d <= totalDays;
+                            const refuelLiters = (mData.refuels || [])
+                                .filter(r => r.date === dateKey)
+                                .reduce((s, r) => s + (Number(r.liters) || 0), 0);
+
+                            if (isWorking) {
+                                const tripKm = Number(dayObj.tripKm) || 0;
+                                wsCalc.getCell(`C${row}`).value = currentOdo;
+                                wsCalc.getCell(`D${row}`).value = currentOdo + tripKm;
+                                wsCalc.getCell(`G${row}`).value = refuelLiters > 0 ? refuelLiters : 0;
+                                currentOdo += tripKm;
+                            } else {
+                                wsCalc.getCell(`C${row}`).value = null;
+                                wsCalc.getCell(`D${row}`).value = null;
+                                wsCalc.getCell(`G${row}`).value = null;
+                            }
+                        }
+                    }
+
+                    /* ── 3. Путевые листы «1»..«31» — маршрутные строки ── */
+                    for (let d = 1; d <= 31; d++) {
+                        const wsDay = wb.getWorksheet(String(d));
+                        if (!wsDay) continue;
+
+                        const dateKey = toDateStr(year, month, d);
+                        const dayObj = (mData.workdays || {})[dateKey];
+                        const isWorking = dayObj && dayObj.isWorkday && d <= totalDays;
+
+                        // Строки маршрута B64..B93 (до 30 точек)
+                        for (let rowIdx = 64; rowIdx <= 93; rowIdx++) {
+                            wsDay.getCell(`B${rowIdx}`).value = null;
+                        }
+
+                        if (isWorking && Array.isArray(dayObj.trips) && dayObj.trips.length > 0) {
+                            const startPoint = p.startPoint || '';
+                            // Маршрут-петля: startPoint → ...trips → startPoint
+                            const routePoints = [startPoint];
+                            dayObj.trips.forEach(tr => {
+                                if (tr.to && tr.to !== startPoint) routePoints.push(tr.to);
+                            });
+                            if (routePoints[routePoints.length - 1] !== startPoint) {
+                                routePoints.push(startPoint);
+                            }
+                            // Обрезаем до 30 точек
+                            const points = routePoints.slice(0, 30);
+                            points.forEach((pt, idx) => {
+                                if (64 + idx <= 93) {
+                                    wsDay.getCell(`B${64 + idx}`).value = pt;
+                                }
+                            });
+                        }
+                    }
+
+                    /* ── 4. Генерация и скачивание файла ── */
+                    const outBuf = await wb.xlsx.writeBuffer();
+                    const blob = new Blob([outBuf], {
+                        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                    });
+                    const url = URL.createObjectURL(blob);
+                    const lastName = (p.fullName || 'Отчет').split(' ')[0] || 'Отчет';
+                    const monthStr = String(month).padStart(2, '0');
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `Автоотчет_${year}-${monthStr}_${lastName}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 1000);
+
+                    /* ── 5. Сохранение конечных значений в облако ── */
+                    if (isAuthVerified) {
+                        try {
+                            await saveMonthCloud(mData, currentMonthKey);
+                        } catch {}
+                    }
+                } catch (err) {
+                    alert(`Ошибка экспорта: ${err.message || err}`);
+                } finally {
+                    setIsExporting(false);
+                }
+            };
+
             /* ── Перенос входящих остатков с прошлого месяца ── */
             const applyPrevMonthBalances = useCallback((targetYear, targetMonth, force = false) => {
                 const targetKey = `${targetYear}-${String(targetMonth).padStart(2,'0')}`;
@@ -5273,6 +5456,7 @@
                                     }}
                                     onPullPrevMonth={(y, m) => applyPrevMonthBalances(y, m, true)}
                                     onSaveMonthCloud={() => saveMonthCloud(currentMonthData, currentMonthKey)}
+                                    onExportExcel={() => exportReportToExcel(profile, currentMonthData)}
                                     cloudStatus={cloudStatus}
                                     userPhone={userPhone}
                                     t={t}
@@ -5292,6 +5476,7 @@
                                     onUpdateDistanceCache={updateDistanceCache}
                                     settings={settings}
                                     cloudStatus={cloudStatus}
+                                    onExportExcel={() => exportReportToExcel(profile, currentMonthData)}
                                     userPhone={userPhone}
                                     t={t}
                                 />
