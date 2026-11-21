@@ -88,6 +88,7 @@
         ═══════════════════════════════════════════════════ */
         const HIDE_UNOFFICIAL_MODE = false;
         const APP_VERSION = '0.1.0';
+        const DEFAULT_GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyTbFwjYlBPXp7n18cAIX_27z2TpuErD2-6F20J7v59YqaBCWY_8jZYl5KBKo4YV8Y/exec';
 
         /* ═══════════════════════════════════════════════════
            2. СИСТЕМА 9 ТЕМ
@@ -251,6 +252,78 @@
                 if (v.text !== undefined)  return String(v.text);
             }
             return String(v);
+        };
+
+        /** Нормализация номера телефона или логина */
+        const normalizePhone = (raw) => {
+            if (!raw) return '';
+            const s = String(raw).trim();
+            const digits = s.replace(/\D/g, '');
+            if (digits.length === 11 && (digits.startsWith('7') || digits.startsWith('8'))) {
+                return '+7' + digits.slice(1);
+            }
+            if (digits.length === 10) {
+                return '+7' + digits;
+            }
+            return s;
+        };
+
+        /** Получить ключ YYYY-MM предыдущего календарного месяца */
+        const getPrevMonthKey = (year, month) => {
+            const y = Number(year);
+            const m = Number(month);
+            const prevYear = m === 1 ? y - 1 : y;
+            const prevMonth = m === 1 ? 12 : m - 1;
+            return `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+        };
+
+        /** Расчет итогов месяца (одометр, остатки, расход) */
+        const getMonthSummary = (monthData, activeNorm) => {
+            const odomStart = Number(monthData.odometerStart) || 0;
+            const fuelStart = Number(monthData.fuelStart) || 0;
+            const workdays = monthData.workdays || {};
+            const workdayKeys = Object.keys(workdays).filter(k => workdays[k].isWorkday).sort();
+            const totalKm = workdayKeys.reduce((s, k) => s + (Number(workdays[k].tripKm) || 0), 0);
+            const totalRefuels = (monthData.refuels || []).reduce((s, r) => s + (Number(r.liters) || 0), 0);
+            const norm = Number(activeNorm) || 0;
+            const totalFuelUsed = norm > 0 ? (totalKm * norm / 100) : 0;
+            const fuelEnd = fuelStart + totalRefuels - totalFuelUsed;
+
+            let odomEnd = odomStart;
+            if (workdayKeys.length > 0) {
+                const lastKey = workdayKeys[workdayKeys.length - 1];
+                odomEnd = Number(workdays[lastKey].odometerEnd) || (odomStart + totalKm);
+            } else {
+                odomEnd = odomStart;
+            }
+
+            return {
+                odometerStart: odomStart,
+                fuelStart: Number(fuelStart.toFixed(2)),
+                odometerEnd: Number(odomEnd.toFixed(2)),
+                fuelEnd: Number(fuelEnd.toFixed(2)),
+                totalKm: Number(totalKm.toFixed(2)),
+                totalFuelUsed: Number(totalFuelUsed.toFixed(2)),
+                workdaysCount: workdayKeys.length
+            };
+        };
+
+        /** Универсальный вызов Google Apps Script Web App (строго text/plain для обхода CORS) */
+        const callGoogleScript = async (url, action, payload = {}) => {
+            const targetUrl = url || DEFAULT_GOOGLE_SCRIPT_URL;
+            const body = JSON.stringify({ action, ...payload });
+            const res = await fetch(targetUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'text/plain;charset=utf-8'
+                },
+                body: body
+            });
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            }
+            const data = await res.json();
+            return data;
         };
 
         /** Пересчёт цепочки рабочих дней месяца */
@@ -470,6 +543,42 @@
             </svg>
         );
 
+        const IconCloud = ({ size = 16, className = '' }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                 strokeLinejoin="round" className={className}>
+                <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+            </svg>
+        );
+
+        const IconCloudCheck = ({ size = 16, className = '' }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                 strokeLinejoin="round" className={className}>
+                <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+                <polyline points="9 13 11 15 15 11"/>
+            </svg>
+        );
+
+        const IconCloudSync = ({ size = 16, className = '' }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                 strokeLinejoin="round" className={className}>
+                <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+                <path d="M12 12v4M10 14h4"/>
+            </svg>
+        );
+
+        const IconLogOut = ({ size = 16, className = '' }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                 strokeLinejoin="round" className={className}>
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+        );
+
         /* ═══════════════════════════════════════════════════
            6. КОМПОНЕНТ СНЕГОПАДА (тема newyear)
         ═══════════════════════════════════════════════════ */
@@ -498,7 +607,7 @@
         /* ═══════════════════════════════════════════════════
            7. КОМПОНЕНТ: КАРТОЧКА СОТРУДНИКА
         ═══════════════════════════════════════════════════ */
-        const ProfileCard = ({ profile, onChange, t }) => {
+        const ProfileCard = ({ profile, onChange, userPhone, onUserPhoneChange, onSaveCloud, cloudStatus, t }) => {
 
             const handleImportXlsx = async (e) => {
                 const file = e.target.files[0];
@@ -529,7 +638,7 @@
                         carPlate:      get(9),
                         driverLicense: get(10),
                         fuelType:      get(11),
-                    });
+                    }, true);
                 } catch (err) {
                     alert('Ошибка чтения файла: ' + err.message);
                 }
@@ -557,67 +666,201 @@
                 'bg-white border-gray-300 text-gray-900 focus:ring-[#C62828] focus:border-[#C62828]'
             );
 
+            const btnPrimary = t(
+                'bg-[#FFB300] text-black hover:bg-[#FFA000]',
+                'bg-amber-600 text-white hover:bg-amber-700',
+                'bg-pink-500 text-white hover:bg-pink-600',
+                'bg-blue-600 text-white hover:bg-blue-700',
+                'bg-emerald-600 text-white hover:bg-emerald-700',
+                'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
+                'bg-[#C62828] text-white hover:bg-[#B71C1C]'
+            );
+
+            const cardClass = t(
+                'bg-[#1E2125] border-[#3A3D42]',
+                'bg-gray-50 border-gray-200',
+                'bg-pink-50 border-pink-200',
+                'bg-blue-50/50 border-blue-200',
+                'bg-emerald-50 border-emerald-200',
+                'bg-[#F5F2EE] border-[#D7CCC8]',
+                'bg-gray-50 border-gray-200'
+            );
+
+            const accentClass = t(
+                'text-[#FFB300]',
+                'text-amber-700',
+                'text-pink-600',
+                'text-blue-600',
+                'text-emerald-700',
+                'text-[#5D4037]',
+                'text-[#9A1B24]'
+            );
+
             const labelClass = 'block text-xs font-bold mb-1 opacity-70';
 
             return (
-                <div className="p-4 space-y-3 animate-fade-in">
-                    {/* Импорт из xlsx */}
-                    <label className={`w-full min-h-[48px] p-3 rounded-lg border border-dashed flex items-center justify-center space-x-2 cursor-pointer text-xs font-bold transition-all ${t(
-                        'bg-[#1E2125] border-[#FFB300]/50 text-[#FFB300] hover:bg-[#282B30]',
-                        'bg-amber-50 border-amber-400 text-amber-900 hover:bg-amber-100',
-                        'bg-pink-50 border-pink-300 text-pink-700 hover:bg-pink-100',
-                        'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100',
-                        'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100',
-                        'bg-[#F5F2EE] border-[#8D6E63] text-[#5D4037] hover:bg-[#EFEBE9]',
-                        'bg-[#FCE8E8] border-[#C62828] text-[#9A1B24] hover:bg-[#F8CACA]'
-                    )}`}>
-                        <IconUpload size={16} />
-                        <span>Загрузить из отчёта (.xlsx)</span>
-                        <input type="file" accept=".xlsx" onChange={handleImportXlsx} className="hidden" />
-                    </label>
-
-                    {/* Поля 1–8 */}
-                    {fields.map(f => (
-                        <div key={f.key}>
-                            <label className={labelClass}>{f.label}</label>
+                <div className="max-w-2xl mx-auto w-full animate-fade-in">
+                    <div className={`p-4 sm:p-6 rounded-xl border space-y-4 ${cardClass}`}>
+                        {/* Идентификатор эксперта */}
+                        <div className={`p-3 rounded-lg border ${t('bg-black/10 border-black/10', 'bg-white border-gray-200', 'bg-white border-pink-200', 'bg-white border-blue-200', 'bg-white border-emerald-200', 'bg-[#EFEBE9] border-[#D7CCC8]', 'bg-white border-gray-200')}`}>
+                            <div className="flex items-center justify-between mb-1">
+                                <label className={`text-xs font-bold flex items-center gap-1.5 ${accentClass}`}>
+                                    <IconUser size={14} /> Телефон / Логин эксперта
+                                </label>
+                                <span className="text-[10px] opacity-50">Ключ: expert_app_user_phone</span>
+                            </div>
                             <input
-                                type={f.type}
+                                type="text"
                                 className={`w-full p-2 text-[16px] sm:text-sm rounded border transition-colors focus:outline-none focus:ring-2 ${inputClass}`}
-                                value={profile[f.key] || ''}
-                                onChange={e => onChange({ ...profile, [f.key]: e.target.value })}
-                                inputMode={f.type === 'number' ? 'decimal' : undefined}
+                                placeholder="+7 (999) 000-00-00 или логин"
+                                value={userPhone || ''}
+                                onChange={e => onUserPhoneChange(e.target.value)}
                             />
                         </div>
-                    ))}
 
-                    {/* Поле 9: Горючее (select) */}
-                    <div>
-                        <label className={labelClass}>Горючее</label>
-                        <select
-                            className={`w-full p-2 text-[16px] sm:text-sm rounded border transition-colors focus:outline-none focus:ring-2 ${inputClass}`}
-                            value={profile.fuelType || 'АИ-95'}
-                            onChange={e => onChange({ ...profile, fuelType: e.target.value })}
-                        >
-                            <option>АИ-95</option>
-                            <option>АИ-92</option>
-                            <option>ДТ</option>
-                        </select>
-                    </div>
+                        {/* Кнопки управления: Импорт xlsx и Сохранение в таблицу */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <label className={`w-full min-h-[48px] p-3 rounded-lg border border-dashed flex items-center justify-center space-x-2 cursor-pointer text-xs font-bold transition-all ${t(
+                                'bg-[#1E2125] border-[#FFB300]/50 text-[#FFB300] hover:bg-[#282B30]',
+                                'bg-amber-50 border-amber-400 text-amber-900 hover:bg-amber-100',
+                                'bg-pink-50 border-pink-300 text-pink-700 hover:bg-pink-100',
+                                'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100',
+                                'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100',
+                                'bg-[#F5F2EE] border-[#8D6E63] text-[#5D4037] hover:bg-[#EFEBE9]',
+                                'bg-[#FCE8E8] border-[#C62828] text-[#9A1B24] hover:bg-[#F8CACA]'
+                            )}`}>
+                                <IconUpload size={16} />
+                                <span>Загрузить из отчёта (.xlsx)</span>
+                                <input type="file" accept=".xlsx" onChange={handleImportXlsx} className="hidden" />
+                            </label>
 
-                    {/* Поле 10: Точка старта */}
-                    <div>
-                        <label className={labelClass}>
-                            <span className="flex items-center gap-1">
-                                <IconMapPin size={12} /> Точка старта (базовый адрес)
-                            </span>
-                        </label>
-                        <input
-                            type="text"
-                            className={`w-full p-2 text-[16px] sm:text-sm rounded border transition-colors focus:outline-none focus:ring-2 ${inputClass}`}
-                            placeholder="Адрес начала и конца каждого маршрута"
-                            value={profile.startPoint || ''}
-                            onChange={e => onChange({ ...profile, startPoint: e.target.value })}
-                        />
+                            <button
+                                type="button"
+                                onClick={onSaveCloud}
+                                disabled={!userPhone || cloudStatus === 'syncing'}
+                                className={`w-full min-h-[48px] p-3 rounded-lg flex items-center justify-center space-x-2 text-xs font-bold transition-all ${
+                                    !userPhone ? 'opacity-40 cursor-not-allowed bg-gray-600 text-white' : btnPrimary
+                                }`}
+                            >
+                                <IconCloud size={16} />
+                                <span>{cloudStatus === 'syncing' ? 'Сохранение...' : 'Сохранить в таблицу'}</span>
+                            </button>
+                        </div>
+
+                        {/* Сетка полей */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {/* ФИО водителя — sm:col-span-2 */}
+                            <div className="sm:col-span-2">
+                                <label className={labelClass}>ФИО водителя</label>
+                                <input
+                                    type="text"
+                                    className={`w-full p-2 text-[16px] sm:text-sm rounded border transition-colors focus:outline-none focus:ring-2 ${inputClass}`}
+                                    value={profile.fullName || ''}
+                                    onChange={e => onChange({ ...profile, fullName: e.target.value }, true)}
+                                />
+                            </div>
+
+                            {/* Должность и Организация — рядом */}
+                            <div>
+                                <label className={labelClass}>Должность</label>
+                                <input
+                                    type="text"
+                                    className={`w-full p-2 text-[16px] sm:text-sm rounded border transition-colors focus:outline-none focus:ring-2 ${inputClass}`}
+                                    value={profile.position || ''}
+                                    onChange={e => onChange({ ...profile, position: e.target.value }, true)}
+                                />
+                            </div>
+                            <div>
+                                <label className={labelClass}>Организация</label>
+                                <input
+                                    type="text"
+                                    className={`w-full p-2 text-[16px] sm:text-sm rounded border transition-colors focus:outline-none focus:ring-2 ${inputClass}`}
+                                    value={profile.organization || ''}
+                                    onChange={e => onChange({ ...profile, organization: e.target.value }, true)}
+                                />
+                            </div>
+
+                            {/* Норма лето и Норма зима — рядом */}
+                            <div>
+                                <label className={labelClass}>Норма расхода — лето (л/100 км)</label>
+                                <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    className={`w-full p-2 text-[16px] sm:text-sm rounded border transition-colors focus:outline-none focus:ring-2 ${inputClass}`}
+                                    value={profile.normSummer || ''}
+                                    onChange={e => onChange({ ...profile, normSummer: e.target.value }, true)}
+                                />
+                            </div>
+                            <div>
+                                <label className={labelClass}>Норма расхода — зима (л/100 км)</label>
+                                <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    className={`w-full p-2 text-[16px] sm:text-sm rounded border transition-colors focus:outline-none focus:ring-2 ${inputClass}`}
+                                    value={profile.normWinter || ''}
+                                    onChange={e => onChange({ ...profile, normWinter: e.target.value }, true)}
+                                />
+                            </div>
+
+                            {/* Марка автомобиля и Госномер — рядом */}
+                            <div>
+                                <label className={labelClass}>Марка автомобиля</label>
+                                <input
+                                    type="text"
+                                    className={`w-full p-2 text-[16px] sm:text-sm rounded border transition-colors focus:outline-none focus:ring-2 ${inputClass}`}
+                                    value={profile.carBrand || ''}
+                                    onChange={e => onChange({ ...profile, carBrand: e.target.value }, true)}
+                                />
+                            </div>
+                            <div>
+                                <label className={labelClass}>Государственный номерной знак</label>
+                                <input
+                                    type="text"
+                                    className={`w-full p-2 text-[16px] sm:text-sm rounded border transition-colors focus:outline-none focus:ring-2 ${inputClass}`}
+                                    value={profile.carPlate || ''}
+                                    onChange={e => onChange({ ...profile, carPlate: e.target.value }, true)}
+                                />
+                            </div>
+
+                            {/* Удостоверение № и Горючее — рядом */}
+                            <div>
+                                <label className={labelClass}>Удостоверение №</label>
+                                <input
+                                    type="text"
+                                    className={`w-full p-2 text-[16px] sm:text-sm rounded border transition-colors focus:outline-none focus:ring-2 ${inputClass}`}
+                                    value={profile.driverLicense || ''}
+                                    onChange={e => onChange({ ...profile, driverLicense: e.target.value }, true)}
+                                />
+                            </div>
+                            <div>
+                                <label className={labelClass}>Горючее</label>
+                                <select
+                                    className={`w-full p-2 text-[16px] sm:text-sm rounded border transition-colors focus:outline-none focus:ring-2 ${inputClass}`}
+                                    value={profile.fuelType || 'АИ-95'}
+                                    onChange={e => onChange({ ...profile, fuelType: e.target.value }, true)}
+                                >
+                                    <option>АИ-95</option>
+                                    <option>АИ-92</option>
+                                    <option>ДТ</option>
+                                </select>
+                            </div>
+
+                            {/* Точка старта — sm:col-span-2 */}
+                            <div className="sm:col-span-2">
+                                <label className={labelClass}>
+                                    <span className="flex items-center gap-1">
+                                        <IconMapPin size={12} /> Точка старта (базовый адрес)
+                                    </span>
+                                </label>
+                                <input
+                                    type="text"
+                                    className={`w-full p-2 text-[16px] sm:text-sm rounded border transition-colors focus:outline-none focus:ring-2 ${inputClass}`}
+                                    placeholder="Адрес начала и конца каждого маршрута"
+                                    value={profile.startPoint || ''}
+                                    onChange={e => onChange({ ...profile, startPoint: e.target.value }, true)}
+                                />
+                            </div>
+                        </div>
                     </div>
                 </div>
             );
@@ -626,11 +869,14 @@
         /* ═══════════════════════════════════════════════════
            8. КОМПОНЕНТ: НАСТРОЙКА МЕСЯЦА + РАБОЧИЕ ДНИ
         ═══════════════════════════════════════════════════ */
-        const MonthSetup = ({ monthData, profile, onUpdate, t }) => {
+        const MonthSetup = ({ monthData, profile, onUpdate, allMonths, onPullPrevMonth, onSaveMonthCloud, cloudStatus, userPhone, t }) => {
 
             const year  = monthData.year;
             const month = monthData.month;
             const totalDays = daysInMonth(year, month);
+            const prevKey = getPrevMonthKey(year, month);
+            const [pYear, pMonth] = prevKey.split('-').map(Number);
+            const prevMonthName = `${MONTH_NAMES[pMonth]} ${pYear}`;
 
             /* ---- Автосезон ---- */
             const autoSeason  = getSeason(year, month);
@@ -640,7 +886,7 @@
                 : (Number(profile.normWinter) || 0);
 
             /* ---- Вспомогалки обновления состояния ---- */
-            const update = (patch) => onUpdate({ ...monthData, ...patch });
+            const update = (patch) => onUpdate({ ...monthData, ...patch }, true);
 
             const updateWorkdays = (newWd) => {
                 const recalced = recalcWorkdays(
@@ -875,11 +1121,24 @@
             );
 
             return (
-                <div className="p-4 space-y-4 animate-fade-in">
+                <div className="w-full space-y-4 animate-fade-in">
 
                     {/* ── Выбор месяца и года ── */}
                     <div className={`rounded-lg border p-3 ${cardClass}`}>
-                        <p className={`text-xs font-bold mb-2 ${accentClass}`}>МЕСЯЦ ОТЧЁТА</p>
+                        <div className="flex items-center justify-between mb-2">
+                            <p className={`text-xs font-bold ${accentClass}`}>МЕСЯЦ ОТЧЁТА</p>
+                            <button
+                                type="button"
+                                onClick={onSaveMonthCloud}
+                                disabled={!userPhone || cloudStatus === 'syncing'}
+                                className={`min-h-[36px] px-3 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition-all ${
+                                    !userPhone ? 'opacity-40 cursor-not-allowed bg-gray-600 text-white' : btnPrimary
+                                }`}
+                            >
+                                <IconCloud size={14} />
+                                <span>{cloudStatus === 'syncing' ? 'Сохранение...' : 'Сохранить месяц в таблицу'}</span>
+                            </button>
+                        </div>
                         <div className="flex gap-2">
                             <select
                                 className={`flex-1 p-2 text-[16px] sm:text-sm rounded border ${inputSm}`}
@@ -962,19 +1221,39 @@
                                 />
                             </div>
                         </div>
-                        <label className={`w-full min-h-[48px] p-2 rounded border border-dashed flex items-center justify-center gap-2 cursor-pointer text-xs font-bold ${t(
-                            'border-[#FFB300]/30 text-[#FFB300]/70 hover:bg-[#282B30]',
-                            'border-amber-300 text-amber-700 hover:bg-amber-50',
-                            'border-pink-300 text-pink-600 hover:bg-pink-50',
-                            'border-blue-300 text-blue-600 hover:bg-blue-50',
-                            'border-emerald-300 text-emerald-700 hover:bg-emerald-50',
-                            'border-[#A1887F] text-[#6D4C41] hover:bg-[#EFEBE9]',
-                            'border-[#C62828]/30 text-[#9A1B24] hover:bg-red-50'
-                        )}`}>
-                            <IconUpload size={14} />
-                            <span>Импорт из отчёта прошлого месяца (.xlsx)</span>
-                            <input type="file" accept=".xlsx" onChange={handleImportPrevMonth} className="hidden" />
-                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <button
+                                type="button"
+                                onClick={() => onPullPrevMonth && onPullPrevMonth(year, month)}
+                                className={`w-full min-h-[48px] p-2 rounded border border-dashed flex items-center justify-center gap-2 text-xs font-bold transition-all ${t(
+                                    'border-[#FFB300]/50 text-[#FFB300] hover:bg-[#282B30]',
+                                    'border-amber-400 text-amber-800 hover:bg-amber-100',
+                                    'border-pink-300 text-pink-600 hover:bg-pink-50',
+                                    'border-blue-300 text-blue-600 hover:bg-blue-50',
+                                    'border-emerald-300 text-emerald-700 hover:bg-emerald-50',
+                                    'border-[#A1887F] text-[#6D4C41] hover:bg-[#EFEBE9]',
+                                    'border-[#C62828]/50 text-[#9A1B24] hover:bg-red-50'
+                                )}`}
+                                title={`Подтянуть одометр и остаток топлива из ${prevMonthName}`}
+                            >
+                                <IconRefresh size={14} />
+                                <span>Подтянуть из прошлого месяца ({prevMonthName})</span>
+                            </button>
+
+                            <label className={`w-full min-h-[48px] p-2 rounded border border-dashed flex items-center justify-center gap-2 cursor-pointer text-xs font-bold transition-all ${t(
+                                'border-[#FFB300]/30 text-[#FFB300]/70 hover:bg-[#282B30]',
+                                'border-amber-300 text-amber-700 hover:bg-amber-50',
+                                'border-pink-300 text-pink-600 hover:bg-pink-50',
+                                'border-blue-300 text-blue-600 hover:bg-blue-50',
+                                'border-emerald-300 text-emerald-700 hover:bg-emerald-50',
+                                'border-[#A1887F] text-[#6D4C41] hover:bg-[#EFEBE9]',
+                                'border-[#C62828]/30 text-[#9A1B24] hover:bg-red-50'
+                            )}`}>
+                                <IconUpload size={14} />
+                                <span>Импорт из отчёта прошлого месяца (.xlsx)</span>
+                                <input type="file" accept=".xlsx" onChange={handleImportPrevMonth} className="hidden" />
+                            </label>
+                        </div>
                     </div>
 
                     {/* ── Таблица заправок ── */}
@@ -1186,6 +1465,19 @@
                         </div>
                     </div>
 
+                    {/* ── Кнопка сохранения месяца в Google Таблицу ── */}
+                    <button
+                        type="button"
+                        onClick={onSaveMonthCloud}
+                        disabled={!userPhone || cloudStatus === 'syncing'}
+                        className={`w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold transition-all ${
+                            !userPhone ? 'opacity-40 cursor-not-allowed bg-gray-600 text-white' : btnPrimary
+                        }`}
+                    >
+                        <IconCloud size={18} />
+                        <span>{cloudStatus === 'syncing' ? 'Сохранение месяца в Google Таблицу...' : 'Сохранить месяц в Google Таблицу'}</span>
+                    </button>
+
                     {/* ── Кнопка «Скачать отчёт» (Этап 2) ── */}
                     <button
                         disabled
@@ -1247,7 +1539,7 @@
             );
 
             return (
-                <div className="p-4 space-y-4 animate-fade-in">
+                <div className="max-w-3xl mx-auto w-full space-y-4 animate-fade-in">
                     <div className={`rounded-lg border p-3 ${cardClass}`}>
                         <p className={`text-xs font-bold mb-1 ${accentClass}`}>АВТОПОДБОР ПРОБЕГА</p>
                         <p className="text-xs opacity-50 mb-3">
@@ -1354,16 +1646,39 @@
         /* ═══════════════════════════════════════════════════
            10. КОМПОНЕНТ: ОКНО НАСТРОЕК
         ═══════════════════════════════════════════════════ */
-        const SettingsModal = ({ theme, onThemeChange, settings, onSettingsChange, onClose, t }) => {
-            const [localSettings, setLocalSettings] = useState({ ...settings });
+        const SettingsModal = ({ theme, onThemeChange, settings, onSettingsChange, userPhone, onSwitchUser, onClose, t }) => {
+            const [localSettings, setLocalSettings] = useState(() => ({
+                ...settings,
+                googleScriptUrl: settings.googleScriptUrl || DEFAULT_GOOGLE_SCRIPT_URL
+            }));
             const [confirmReset, setConfirmReset] = useState(false);
+            const [confirmSwitch, setConfirmSwitch] = useState(false);
+            const [pingStatus, setPingStatus] = useState(null); // 'loading' | 'success' | 'error'
+            const [pingMsg, setPingMsg] = useState('');
 
             const themeIdx  = THEME_LIST.findIndex(x => x.id === theme);
             const prevTheme = () => onThemeChange(THEME_LIST[(themeIdx - 1 + THEME_LIST.length) % THEME_LIST.length].id);
             const nextTheme = () => onThemeChange(THEME_LIST[(themeIdx + 1) % THEME_LIST.length].id);
 
+            const handlePing = async () => {
+                setPingStatus('loading');
+                setPingMsg('');
+                try {
+                    const url = localSettings.googleScriptUrl || DEFAULT_GOOGLE_SCRIPT_URL;
+                    const res = await callGoogleScript(url, 'ping');
+                    setPingStatus('success');
+                    setPingMsg(res && res.message ? `Подключено: ${res.message}` : 'Подключено ✓');
+                } catch (err) {
+                    setPingStatus('error');
+                    setPingMsg(err.message || 'Ошибка связи');
+                }
+            };
+
             const save = () => {
-                onSettingsChange(localSettings);
+                onSettingsChange({
+                    ...localSettings,
+                    googleScriptUrl: localSettings.googleScriptUrl || DEFAULT_GOOGLE_SCRIPT_URL
+                });
                 onClose();
             };
 
@@ -1435,6 +1750,47 @@
 
                         <div className="p-4 space-y-3 overflow-y-auto max-h-[80vh] hide-scrollbar">
 
+                            {/* Блок текущего эксперта */}
+                            <div className={`p-3 rounded-lg border ${rowClass}`}>
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-xs font-bold flex items-center gap-1.5">
+                                        <IconUser size={14} className={accentClass} /> Эксперт (портал)
+                                    </span>
+                                    <span className="text-xs font-mono font-bold opacity-80">
+                                        {userPhone || 'Не авторизован'}
+                                    </span>
+                                </div>
+                                <div className="mt-2">
+                                    {!confirmSwitch ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => setConfirmSwitch(true)}
+                                            className="w-full min-h-[36px] py-1 px-2 rounded text-xs font-bold border border-gray-400 opacity-80 hover:opacity-100 flex items-center justify-center gap-1.5"
+                                        >
+                                            <IconLogOut size={14} />
+                                            <span>Сменить пользователя</span>
+                                        </button>
+                                    ) : (
+                                        <div className="flex gap-2 animate-fade-in">
+                                            <button
+                                                type="button"
+                                                onClick={() => setConfirmSwitch(false)}
+                                                className="flex-1 min-h-[36px] rounded text-xs font-bold border border-gray-400 opacity-70 hover:opacity-100"
+                                            >
+                                                Отмена
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={onSwitchUser}
+                                                className="flex-1 min-h-[36px] rounded text-xs font-bold bg-amber-600 text-white hover:bg-amber-700"
+                                            >
+                                                Да, выйти!
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
                             {/* Тема */}
                             <div className={`p-3 rounded-lg border flex items-center justify-between ${rowClass}`}>
                                 <span className="text-xs font-bold">Тема оформления</span>
@@ -1460,16 +1816,59 @@
                                 </div>
                             </div>
 
-                            {/* Google Apps Script URL */}
+                            {/* Google Apps Script URL с кнопкой проверки */}
                             <div>
-                                <label className="block text-xs font-bold mb-1 opacity-70">URL Google Apps Script</label>
-                                <input
-                                    type="url"
-                                    className={`w-full p-2 text-[16px] sm:text-sm rounded border ${overlayInput}`}
-                                    placeholder="https://script.google.com/macros/s/..."
-                                    value={localSettings.googleScriptUrl || ''}
-                                    onChange={e => setLocalSettings({ ...localSettings, googleScriptUrl: e.target.value })}
-                                />
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="text-xs font-bold opacity-70">URL Google Apps Script</label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setLocalSettings({ ...localSettings, googleScriptUrl: DEFAULT_GOOGLE_SCRIPT_URL })}
+                                        className="text-[10px] opacity-60 hover:opacity-100 underline"
+                                    >
+                                        Сбросить URL
+                                    </button>
+                                </div>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="url"
+                                        className={`flex-1 p-2 text-[16px] sm:text-sm rounded border ${overlayInput}`}
+                                        placeholder="https://script.google.com/macros/s/..."
+                                        value={localSettings.googleScriptUrl || ''}
+                                        onChange={e => {
+                                            setLocalSettings({ ...localSettings, googleScriptUrl: e.target.value });
+                                            setPingStatus(null);
+                                        }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handlePing}
+                                        disabled={pingStatus === 'loading'}
+                                        className={`px-3 py-2 min-h-[40px] text-xs font-bold rounded flex items-center gap-1 border transition-all ${
+                                            pingStatus === 'loading' ? 'opacity-50' : ''
+                                        } ${t(
+                                            'border-[#FFB300]/60 text-[#FFB300] hover:bg-[#1E2125]',
+                                            'border-amber-500 text-amber-800 hover:bg-amber-50',
+                                            'border-pink-400 text-pink-700 hover:bg-pink-50',
+                                            'border-blue-500 text-blue-700 hover:bg-blue-50',
+                                            'border-emerald-500 text-emerald-800 hover:bg-emerald-50',
+                                            'border-[#8D6E63] text-[#5D4037] hover:bg-[#EFEBE9]',
+                                            'border-[#C62828] text-[#9A1B24] hover:bg-red-50'
+                                        )}`}
+                                    >
+                                        <IconRefresh size={13} className={pingStatus === 'loading' ? 'animate-spin' : ''} />
+                                        <span>{pingStatus === 'loading' ? '...' : 'Проверить связь'}</span>
+                                    </button>
+                                </div>
+                                {pingStatus === 'success' && (
+                                    <p className="text-xs text-green-500 font-bold mt-1.5 flex items-center gap-1">
+                                        <IconCheck size={14} /> {pingMsg || 'Подключено'}
+                                    </p>
+                                )}
+                                {pingStatus === 'error' && (
+                                    <p className="text-xs text-red-500 font-bold mt-1.5 flex items-center gap-1">
+                                        <IconAlertTriangle size={14} /> {pingMsg || 'Ошибка подключения'}
+                                    </p>
+                                )}
                             </div>
 
                             {/* Ключ Яндекс Карт */}
@@ -1548,6 +1947,14 @@
             /* ── Тема ── */
             const [theme, setTheme] = useState(initTheme);
 
+            /* ── Идентификатор эксперта (телефон / логин) ── */
+            const [userPhone, setUserPhone] = useState(() => {
+                return localStorage.getItem('expert_app_user_phone') || '';
+            });
+            const [loginInput, setLoginInput] = useState(() => {
+                return localStorage.getItem('expert_app_user_phone') || '';
+            });
+
             /* ── Режим (официальный / автоподбор) ── */
             const [mode, setMode] = useState('official');
 
@@ -1557,8 +1964,14 @@
             /* ── Настройки (Google Script URL, Яндекс ключ) ── */
             const [settings, setSettings] = useState(() => {
                 try {
-                    return JSON.parse(localStorage.getItem('expert_report_settings') || '{}');
-                } catch { return {}; }
+                    const saved = JSON.parse(localStorage.getItem('expert_report_settings') || '{}');
+                    if (!saved.googleScriptUrl) {
+                        saved.googleScriptUrl = DEFAULT_GOOGLE_SCRIPT_URL;
+                    }
+                    return saved;
+                } catch {
+                    return { googleScriptUrl: DEFAULT_GOOGLE_SCRIPT_URL };
+                }
             });
 
             /* ── Профиль сотрудника ── */
@@ -1574,6 +1987,17 @@
                     return JSON.parse(localStorage.getItem('expert_report_months') || '{}');
                 } catch { return {}; }
             });
+
+            /* ── Статус облачной синхронизации ── */
+            const [cloudStatus, setCloudStatus] = useState('idle'); // 'idle' | 'syncing' | 'saved' | 'error'
+            const [cloudErrorMsg, setCloudErrorMsg] = useState('');
+
+            /* ── Защитные флаги для автосохранения ── */
+            const isHydratingRef = useRef(true);
+            const userChangedProfileRef = useRef(false);
+            const userChangedMonthRef = useRef(false);
+            const profileDebounceRef = useRef(null);
+            const monthDebounceRef = useRef(null);
 
             /* ── Текущий месяц по умолчанию — сегодня ── */
             const now = new Date();
@@ -1614,34 +2038,261 @@
 
             const currentMonthData = getOrCreateMonth(currentMonthKey);
 
-            const updateCurrentMonth = (newData) => {
+            const updateCurrentMonth = (newData, isUserAction = false) => {
+                if (isUserAction) {
+                    userChangedMonthRef.current = true;
+                }
                 setMonths(prev => ({ ...prev, [currentMonthKey]: newData }));
             };
 
-            /* ── Персистентность ── */
+            const updateProfile = (newProfile, isUserAction = false) => {
+                if (isUserAction) {
+                    userChangedProfileRef.current = true;
+                }
+                setProfile(newProfile);
+            };
+
+            /* ── Персистентность локального кэша ── */
             useEffect(() => {
                 localStorage.setItem('expert_app_theme', theme);
             }, [theme]);
 
             useEffect(() => {
-                localStorage.setItem('expert_report_profile', JSON.stringify(profile));
-            }, [profile]);
-
-            useEffect(() => {
-                localStorage.setItem('expert_report_months', JSON.stringify(months));
-            }, [months]);
-
-            useEffect(() => {
                 localStorage.setItem('expert_report_settings', JSON.stringify(settings));
-                // Пробрасываем в window для совместимости
                 if (settings.googleScriptUrl) window.GOOGLE_SCRIPT_URL   = settings.googleScriptUrl;
                 if (settings.yandexApiKey)    window.YANDEX_MAPS_API_KEY = settings.yandexApiKey;
             }, [settings]);
 
+            /* ── Загрузка данных пользователя из Google Таблицы ── */
+            const loadUserData = async (phoneToLoad) => {
+                const phone = normalizePhone(phoneToLoad || userPhone);
+                const scriptUrl = settings.googleScriptUrl || DEFAULT_GOOGLE_SCRIPT_URL;
+                if (!phone || !scriptUrl) {
+                    isHydratingRef.current = false;
+                    return;
+                }
+
+                setCloudStatus('syncing');
+                setCloudErrorMsg('');
+                try {
+                    const res = await callGoogleScript(scriptUrl, 'loadUserData', { userId: phone });
+                    isHydratingRef.current = true;
+                    userChangedProfileRef.current = false;
+                    userChangedMonthRef.current = false;
+
+                    let loadedProfile = null;
+                    let loadedMonths = null;
+
+                    if (res) {
+                        if (res.profile) loadedProfile = res.profile;
+                        else if (res.data && res.data.profile) loadedProfile = res.data.profile;
+
+                        if (res.months) loadedMonths = res.months;
+                        else if (res.data && res.data.months) loadedMonths = res.data.months;
+                    }
+
+                    if (loadedProfile && typeof loadedProfile === 'object') {
+                        setProfile(prev => ({ ...prev, ...loadedProfile }));
+                    }
+                    if (loadedMonths && typeof loadedMonths === 'object') {
+                        setMonths(prev => ({ ...prev, ...loadedMonths }));
+                    }
+
+                    setCloudStatus('saved');
+                } catch (err) {
+                    console.error('Ошибка загрузки данных из Google Таблицы:', err);
+                    setCloudStatus('error');
+                    setCloudErrorMsg(err.message || 'Ошибка загрузки данных');
+                } finally {
+                    setTimeout(() => {
+                        isHydratingRef.current = false;
+                    }, 500);
+                }
+            };
+
+            /* ── Первичная инициализация при старте ── */
+            useEffect(() => {
+                if (userPhone) {
+                    loadUserData(userPhone);
+                } else {
+                    isHydratingRef.current = false;
+                }
+            }, []);
+
+            /* ── Вход пользователя ── */
+            const handleLogin = async (phoneInput) => {
+                const clean = normalizePhone(phoneInput);
+                if (!clean) {
+                    alert('Пожалуйста, введите номер телефона или логин');
+                    return;
+                }
+                localStorage.setItem('expert_app_user_phone', clean);
+                setUserPhone(clean);
+                setLoginInput(clean);
+                await loadUserData(clean);
+            };
+
+            /* ── Смена пользователя (безопасный сброс) ── */
+            const handleSwitchUser = () => {
+                if (profileDebounceRef.current) clearTimeout(profileDebounceRef.current);
+                if (monthDebounceRef.current) clearTimeout(monthDebounceRef.current);
+                localStorage.removeItem('expert_app_user_phone');
+                Object.keys(localStorage)
+                    .filter(k => k.startsWith('expert_report_'))
+                    .forEach(k => localStorage.removeItem(k));
+                window.location.reload();
+            };
+
+            /* ── Сохранение профиля в Google Таблицу ── */
+            const saveProfileCloud = async (customProfile) => {
+                const phone = normalizePhone(userPhone);
+                const scriptUrl = settings.googleScriptUrl || DEFAULT_GOOGLE_SCRIPT_URL;
+                if (!phone || !scriptUrl) return;
+
+                const dataToSave = customProfile || profile;
+                setCloudStatus('syncing');
+                setCloudErrorMsg('');
+                try {
+                    await callGoogleScript(scriptUrl, 'saveProfile', {
+                        userId: phone,
+                        profile: dataToSave
+                    });
+                    setCloudStatus('saved');
+                } catch (err) {
+                    console.error('Ошибка сохранения профиля:', err);
+                    setCloudStatus('error');
+                    setCloudErrorMsg(err.message || 'Ошибка сохранения профиля');
+                }
+            };
+
+            /* ── Сохранение месяца в Google Таблицу ── */
+            const saveMonthCloud = async (customMonthData, customKey) => {
+                const phone = normalizePhone(userPhone);
+                const scriptUrl = settings.googleScriptUrl || DEFAULT_GOOGLE_SCRIPT_URL;
+                if (!phone || !scriptUrl) return;
+
+                const mData = customMonthData || currentMonthData;
+                const mKey = customKey || currentMonthKey;
+
+                const activeSeason = mData.seasonOverride || getSeason(mData.year, mData.month);
+                const activeNorm = activeSeason === 'summer'
+                    ? (Number(profile.normSummer) || 0)
+                    : (Number(profile.normWinter) || 0);
+
+                const summary = getMonthSummary(mData, activeNorm);
+
+                setCloudStatus('syncing');
+                setCloudErrorMsg('');
+                try {
+                    await callGoogleScript(scriptUrl, 'saveMonth', {
+                        userId: phone,
+                        yearMonth: mKey,
+                        summary: summary,
+                        monthData: mData
+                    });
+                    setCloudStatus('saved');
+                } catch (err) {
+                    console.error('Ошибка сохранения месяца:', err);
+                    setCloudStatus('error');
+                    setCloudErrorMsg(err.message || 'Ошибка сохранения месяца');
+                }
+            };
+
+            /* ── Debounce автосохранения профиля (1500 мс) ── */
+            useEffect(() => {
+                localStorage.setItem('expert_report_profile', JSON.stringify(profile));
+                if (isHydratingRef.current || !userChangedProfileRef.current || !userPhone) {
+                    return;
+                }
+                if (profileDebounceRef.current) clearTimeout(profileDebounceRef.current);
+                profileDebounceRef.current = setTimeout(() => {
+                    saveProfileCloud(profile);
+                }, 1500);
+
+                return () => {
+                    if (profileDebounceRef.current) clearTimeout(profileDebounceRef.current);
+                };
+            }, [profile]);
+
+            /* ── Debounce автосохранения месяца (2000 мс) ── */
+            useEffect(() => {
+                localStorage.setItem('expert_report_months', JSON.stringify(months));
+                if (isHydratingRef.current || !userChangedMonthRef.current || !userPhone) {
+                    return;
+                }
+                if (monthDebounceRef.current) clearTimeout(monthDebounceRef.current);
+                monthDebounceRef.current = setTimeout(() => {
+                    saveMonthCloud(currentMonthData, currentMonthKey);
+                }, 2000);
+
+                return () => {
+                    if (monthDebounceRef.current) clearTimeout(monthDebounceRef.current);
+                };
+            }, [months, currentMonthKey]);
+
+            /* ── Перенос входящих остатков с прошлого месяца ── */
+            const applyPrevMonthBalances = useCallback((targetYear, targetMonth, force = false) => {
+                const targetKey = `${targetYear}-${String(targetMonth).padStart(2,'0')}`;
+                const targetData = getOrCreateMonth(targetKey);
+
+                if (!force && ((Number(targetData.odometerStart) || 0) > 0 || (Number(targetData.fuelStart) || 0) > 0)) {
+                    return;
+                }
+
+                const prevKey = getPrevMonthKey(targetYear, targetMonth);
+                const prevData = months[prevKey];
+                if (!prevData) {
+                    if (force) alert(`Данные за ${prevKey} не найдены`);
+                    return;
+                }
+
+                const prevSeason = prevData.seasonOverride || getSeason(prevData.year, prevData.month);
+                const prevNorm = prevSeason === 'summer'
+                    ? (Number(profile.normSummer) || 0)
+                    : (Number(profile.normWinter) || 0);
+
+                const prevSummary = getMonthSummary(prevData, prevNorm);
+
+                const activeSeason = targetData.seasonOverride || getSeason(targetYear, targetMonth);
+                const activeNorm = activeSeason === 'summer'
+                    ? (Number(profile.normSummer) || 0)
+                    : (Number(profile.normWinter) || 0);
+
+                const recalced = recalcWorkdays(
+                    targetData.workdays || {},
+                    prevSummary.odometerEnd,
+                    prevSummary.fuelEnd,
+                    targetData.refuels || [],
+                    activeNorm
+                );
+
+                const updated = {
+                    ...targetData,
+                    odometerStart: prevSummary.odometerEnd,
+                    fuelStart: prevSummary.fuelEnd,
+                    workdays: recalced
+                };
+
+                userChangedMonthRef.current = true;
+                setMonths(prev => ({ ...prev, [targetKey]: updated }));
+                if (force) {
+                    alert(`Перенесены остатки из ${prevKey}:\n• Одометр: ${prevSummary.odometerEnd} км\n• Топливо: ${prevSummary.fuelEnd} л`);
+                }
+            }, [months, profile, getOrCreateMonth]);
+
+            /* ── Автоперенос при выборе месяца с 0 остатками ── */
+            useEffect(() => {
+                if (isHydratingRef.current) return;
+                const mData = currentMonthData;
+                if ((Number(mData.odometerStart) || 0) === 0 && (Number(mData.fuelStart) || 0) === 0) {
+                    applyPrevMonthBalances(mData.year, mData.month, false);
+                }
+            }, [currentMonthKey, isHydratingRef.current]);
+
             /* ── Хелпер темы ── */
             const t = makeT(theme);
 
-            /* ── Фон приложения ── */
+            /* ── Стили интерфейса ── */
             const appBg = t(
                 'bg-[#101112] text-gray-100',
                 'bg-[#F0F2F5] text-gray-900',
@@ -1687,6 +2338,16 @@
                 'text-gray-500 hover:text-[#9A1B24]'
             );
 
+            const btnPrimary = t(
+                'bg-[#FFB300] text-black hover:bg-[#FFA000]',
+                'bg-amber-600 text-white hover:bg-amber-700',
+                'bg-pink-500 text-white hover:bg-pink-600',
+                'bg-blue-600 text-white hover:bg-blue-700',
+                'bg-emerald-600 text-white hover:bg-emerald-700',
+                'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
+                'bg-[#C62828] text-white hover:bg-[#B71C1C]'
+            );
+
             const modeSwitchBase = 'flex rounded-full border overflow-hidden text-xs font-bold ' + t(
                 'border-[#FFB300]/40','border-amber-400','border-pink-400',
                 'border-blue-400','border-emerald-400','border-[#A1887F]','border-[#C62828]/40'
@@ -1699,96 +2360,192 @@
                     {theme === 'newyear' && <SnowEffect />}
 
                     {/* ══ ШАПКА ══ */}
-                    <header className={`flex-shrink-0 flex items-center justify-between px-4 py-3 border-b shadow-sm z-10 ${headerBg}`}>
-                        {/* Заголовок — выровнен по левому краю */}
-                        <h1
-                            className={`text-lg font-black tracking-tight select-none ${accentClass}`}
-                            onClick={handleTitleClick}
-                            style={{ cursor: HIDE_UNOFFICIAL_MODE ? 'default' : 'default' }}
-                        >
-                            Автоотчет
-                        </h1>
+                    <header className={`flex-shrink-0 border-b shadow-sm z-10 ${headerBg}`}>
+                        <div className="max-w-4xl mx-auto w-full px-4 py-3 flex items-center justify-between">
+                            {/* Заголовок — выровнен по левому краю */}
+                            <h1
+                                className={`text-lg font-black tracking-tight select-none ${accentClass}`}
+                                onClick={handleTitleClick}
+                                style={{ cursor: HIDE_UNOFFICIAL_MODE ? 'default' : 'default' }}
+                            >
+                                Автоотчет
+                            </h1>
 
-                        {/* Переключатель режимов */}
-                        {!HIDE_UNOFFICIAL_MODE && (
-                            <div className={modeSwitchBase}>
+                            {/* Переключатель режимов */}
+                            {!HIDE_UNOFFICIAL_MODE && (
+                                <div className={modeSwitchBase}>
+                                    <button
+                                        onClick={() => setMode('official')}
+                                        className={`px-3 py-1.5 min-h-[36px] transition-colors ${mode === 'official' ? tabActive : tabInactive}`}
+                                    >
+                                        Официальный
+                                    </button>
+                                    <button
+                                        onClick={() => setMode('autoselect')}
+                                        className={`px-3 py-1.5 min-h-[36px] transition-colors ${mode === 'autoselect' ? tabActive : tabInactive}`}
+                                    >
+                                        Автоподбор
+                                    </button>
+                                </div>
+                            )}
+
+                            <div className="flex items-center">
+                                {/* Индикатор облачной синхронизации */}
+                                <div className="flex items-center gap-1.5 mr-2">
+                                    {cloudStatus === 'syncing' && (
+                                        <span className="flex items-center gap-1 text-xs font-bold text-amber-500 animate-pulse" title="Синхронизация с Google Таблицей">
+                                            <IconCloudSync size={16} />
+                                            <span className="hidden sm:inline">Сохранение...</span>
+                                        </span>
+                                    )}
+                                    {cloudStatus === 'saved' && (
+                                        <span className="flex items-center gap-1 text-xs font-bold text-green-500" title="Данные синхронизированы с Google Таблицей">
+                                            <IconCloudCheck size={16} />
+                                            <span className="hidden sm:inline">Облако ✓</span>
+                                        </span>
+                                    )}
+                                    {cloudStatus === 'error' && (
+                                        <span className="flex items-center gap-1 text-xs font-bold text-red-500 cursor-pointer" title={cloudErrorMsg || 'Ошибка облака'} onClick={() => alert(cloudErrorMsg || 'Ошибка синхронизации')}>
+                                            <IconAlertTriangle size={16} />
+                                            <span className="hidden sm:inline">Ошибка облака</span>
+                                        </span>
+                                    )}
+                                    {cloudStatus === 'idle' && (
+                                        <span className="flex items-center gap-1 text-xs font-bold opacity-40" title={userPhone ? `Эксперт: ${userPhone}` : 'Вход не выполнен'}>
+                                            <IconCloud size={16} />
+                                            <span className="hidden sm:inline">{userPhone ? 'Облако' : 'Офлайн'}</span>
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Кнопка настроек */}
                                 <button
-                                    onClick={() => setMode('official')}
-                                    className={`px-3 py-1.5 min-h-[36px] transition-colors ${mode === 'official' ? tabActive : tabInactive}`}
+                                    onClick={() => setShowSettings(true)}
+                                    className={`min-h-[48px] min-w-[48px] flex items-center justify-center rounded-lg transition-opacity hover:opacity-80 ${accentClass}`}
+                                    aria-label="Настройки"
                                 >
-                                    Официальный
-                                </button>
-                                <button
-                                    onClick={() => setMode('autoselect')}
-                                    className={`px-3 py-1.5 min-h-[36px] transition-colors ${mode === 'autoselect' ? tabActive : tabInactive}`}
-                                >
-                                    Автоподбор
+                                    <IconSettings size={22} />
                                 </button>
                             </div>
-                        )}
-
-                        {/* Кнопка настроек */}
-                        <button
-                            onClick={() => setShowSettings(true)}
-                            className={`min-h-[48px] min-w-[48px] flex items-center justify-center rounded-lg transition-opacity hover:opacity-80 ${accentClass}`}
-                            aria-label="Настройки"
-                        >
-                            <IconSettings size={22} />
-                        </button>
+                        </div>
                     </header>
+
+                    {/* ══ ПЛАШКА ПЕРВИЧНОГО ВХОДА (если номер не задан) ══ */}
+                    {!userPhone && (
+                        <div className={`p-3 sm:p-4 border-b ${t(
+                            'bg-amber-500/10 border-amber-500/30 text-amber-200',
+                            'bg-amber-50 border-amber-200 text-amber-900',
+                            'bg-pink-50 border-pink-200 text-pink-900',
+                            'bg-blue-50 border-blue-200 text-blue-900',
+                            'bg-emerald-50 border-emerald-200 text-emerald-900',
+                            'bg-[#F5F2EE] border-[#8D6E63] text-[#5D4037]',
+                            'bg-[#FCE8E8] border-[#C62828] text-[#9A1B24]'
+                        )}`}>
+                            <div className="max-w-4xl mx-auto w-full px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-xs font-bold mb-0.5">Вход эксперта (портал «Эксперт»)</p>
+                                    <p className="text-[11px] opacity-75">
+                                        Введите телефон или логин для загрузки карточки и сохранения месяцев в Google Таблицу.
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                    <input
+                                        type="text"
+                                        value={loginInput}
+                                        onChange={e => setLoginInput(e.target.value)}
+                                        placeholder="+7 (999) 000-00-00"
+                                        className={`p-2 text-[16px] sm:text-xs rounded border flex-1 sm:w-48 ${t(
+                                            'bg-[#1E2125] border-gray-700 text-white',
+                                            'bg-white border-gray-300 text-gray-900',
+                                            'bg-pink-50 border-pink-200 text-pink-900',
+                                            'bg-blue-50 border-blue-200 text-blue-900',
+                                            'bg-emerald-50 border-emerald-200 text-emerald-900',
+                                            'bg-[#EFEBE9] border-[#D7CCC8] text-[#3E2723]',
+                                            'bg-white border-gray-300 text-gray-900'
+                                        )}`}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => handleLogin(loginInput)}
+                                        className={`px-3 py-2 min-h-[40px] text-xs font-bold rounded flex items-center gap-1.5 whitespace-nowrap ${btnPrimary}`}
+                                    >
+                                        <span>Войти и загрузить</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* ══ ВКЛАДКИ (только в официальном режиме) ══ */}
                     {mode === 'official' && (
-                        <div className={`flex-shrink-0 flex border-b ${t('border-[#3A3D42] bg-[#1A1D21]','border-gray-200 bg-white','border-pink-200 bg-white','border-blue-200 bg-white','border-emerald-200 bg-white','border-[#D7CCC8] bg-[#FDFBF7]','border-gray-200 bg-white')}`}>
-                            <button
-                                onClick={() => setOfficialTab('profile')}
-                                className={`flex-1 flex items-center justify-center gap-2 py-3 min-h-[48px] text-sm font-bold border-b-2 transition-colors ${
-                                    officialTab === 'profile'
-                                        ? `border-current ${accentClass}`
-                                        : `border-transparent ${tabInactive}`
-                                }`}
-                            >
-                                <IconUser size={16} />
-                                Карточка
-                            </button>
-                            <button
-                                onClick={() => setOfficialTab('month')}
-                                className={`flex-1 flex items-center justify-center gap-2 py-3 min-h-[48px] text-sm font-bold border-b-2 transition-colors ${
-                                    officialTab === 'month'
-                                        ? `border-current ${accentClass}`
-                                        : `border-transparent ${tabInactive}`
-                                }`}
-                            >
-                                <IconCalendar size={16} />
-                                {MONTH_NAMES[currentMonthData.month]} {currentMonthData.year}
-                            </button>
+                        <div className={`flex-shrink-0 border-b ${t('border-[#3A3D42] bg-[#1A1D21]','border-gray-200 bg-white','border-pink-200 bg-white','border-blue-200 bg-white','border-emerald-200 bg-white','border-[#D7CCC8] bg-[#FDFBF7]','border-gray-200 bg-white')}`}>
+                            <div className="max-w-4xl mx-auto w-full px-4 flex">
+                                <button
+                                    onClick={() => setOfficialTab('profile')}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-3 min-h-[48px] text-sm font-bold border-b-2 transition-colors ${
+                                        officialTab === 'profile'
+                                            ? `border-current ${accentClass}`
+                                            : `border-transparent ${tabInactive}`
+                                    }`}
+                                >
+                                    <IconUser size={16} />
+                                    Карточка
+                                </button>
+                                <button
+                                    onClick={() => setOfficialTab('month')}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-3 min-h-[48px] text-sm font-bold border-b-2 transition-colors ${
+                                        officialTab === 'month'
+                                            ? `border-current ${accentClass}`
+                                            : `border-transparent ${tabInactive}`
+                                    }`}
+                                >
+                                    <IconCalendar size={16} />
+                                    {MONTH_NAMES[currentMonthData.month]} {currentMonthData.year}
+                                </button>
+                            </div>
                         </div>
                     )}
 
                     {/* ══ КОНТЕНТ ══ */}
                     <main className="flex-1 overflow-y-auto hide-scrollbar">
-                        {mode === 'official' && officialTab === 'profile' && (
-                            <ProfileCard
-                                profile={profile}
-                                onChange={setProfile}
-                                t={t}
-                            />
-                        )}
-                        {mode === 'official' && officialTab === 'month' && (
-                            <MonthSetup
-                                monthData={currentMonthData}
-                                profile={profile}
-                                onUpdate={updateCurrentMonth}
-                                t={t}
-                            />
-                        )}
-                        {mode === 'autoselect' && (
-                            <AutoSelectScreen
-                                monthData={currentMonthData}
-                                profile={profile}
-                                t={t}
-                            />
-                        )}
+                        <div className="max-w-4xl mx-auto w-full px-4 py-4">
+                            {mode === 'official' && officialTab === 'profile' && (
+                                <ProfileCard
+                                    profile={profile}
+                                    onChange={updateProfile}
+                                    userPhone={userPhone}
+                                    onUserPhoneChange={phone => {
+                                        const clean = normalizePhone(phone);
+                                        setUserPhone(clean);
+                                        setLoginInput(clean);
+                                        localStorage.setItem('expert_app_user_phone', clean);
+                                    }}
+                                    onSaveCloud={() => saveProfileCloud(profile)}
+                                    cloudStatus={cloudStatus}
+                                    t={t}
+                                />
+                            )}
+                            {mode === 'official' && officialTab === 'month' && (
+                                <MonthSetup
+                                    monthData={currentMonthData}
+                                    profile={profile}
+                                    onUpdate={updateCurrentMonth}
+                                    allMonths={months}
+                                    onPullPrevMonth={(y, m) => applyPrevMonthBalances(y, m, true)}
+                                    onSaveMonthCloud={() => saveMonthCloud(currentMonthData, currentMonthKey)}
+                                    cloudStatus={cloudStatus}
+                                    userPhone={userPhone}
+                                    t={t}
+                                />
+                            )}
+                            {mode === 'autoselect' && (
+                                <AutoSelectScreen
+                                    monthData={currentMonthData}
+                                    profile={profile}
+                                    t={t}
+                                />
+                            )}
+                        </div>
                     </main>
 
                     {/* ══ МОДАЛКА НАСТРОЕК ══ */}
@@ -1798,6 +2555,8 @@
                             onThemeChange={setTheme}
                             settings={settings}
                             onSettingsChange={setSettings}
+                            userPhone={userPhone}
+                            onSwitchUser={handleSwitchUser}
                             onClose={() => setShowSettings(false)}
                             t={t}
                         />
