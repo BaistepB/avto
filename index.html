@@ -2506,7 +2506,6 @@
                 if (!previewRecalced) return false;
                 return Object.values(previewRecalced).some(d => d.isWorkday && (Number(d.fuelEnd) || 0) < -0.0001);
             }, [previewRecalced]);
-            };
 
             /* ── Применение распределения (Страховка 1: мгновенный сброс предпросмотра) ── */
             const handleApply = () => {
