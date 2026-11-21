@@ -254,18 +254,46 @@
             return String(v);
         };
 
-        /** Нормализация номера телефона или логина */
+        /** Нормализация номера телефона (строго 11 цифр, начиная с 7) */
         const normalizePhone = (raw) => {
             if (!raw) return '';
-            const s = String(raw).trim();
-            const digits = s.replace(/\D/g, '');
+            let digits = String(raw).replace(/\D/g, '');
             if (digits.length === 11 && (digits.startsWith('7') || digits.startsWith('8'))) {
-                return '+7' + digits.slice(1);
+                digits = '7' + digits.slice(1);
+            } else if (digits.length === 10) {
+                digits = '7' + digits;
             }
-            if (digits.length === 10) {
-                return '+7' + digits;
+            return digits.slice(0, 11);
+        };
+
+        /** Форматирование номера телефона в корпоративную маску +7 ХХХ ХХХ ХХ ХХ */
+        const formatPhoneMask = (raw) => {
+            if (!raw) return '';
+            let digits = String(raw).replace(/\D/g, '');
+            if (digits.startsWith('8')) digits = '7' + digits.slice(1);
+            if (!digits.startsWith('7')) digits = '7' + digits;
+            digits = digits.slice(0, 11);
+
+            let res = '+7';
+            if (digits.length > 1) {
+                res += ' ' + digits.slice(1, Math.min(4, digits.length));
             }
-            return s;
+            if (digits.length > 4) {
+                res += ' ' + digits.slice(4, Math.min(7, digits.length));
+            }
+            if (digits.length > 7) {
+                res += ' ' + digits.slice(7, Math.min(9, digits.length));
+            }
+            if (digits.length > 9) {
+                res += ' ' + digits.slice(9, 11);
+            }
+            return res;
+        };
+
+        /** Нормализация ПИН-кода (ровно 4 цифры) */
+        const normalizePin = (raw) => {
+            if (!raw) return '';
+            return String(raw).replace(/\D/g, '').slice(0, 4);
         };
 
         /** Получить ключ YYYY-MM предыдущего календарного месяца */
@@ -579,6 +607,15 @@
             </svg>
         );
 
+        const IconLock = ({ size = 16, className = '' }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                 strokeLinejoin="round" className={className}>
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+        );
+
         /* ═══════════════════════════════════════════════════
            6. КОМПОНЕНТ СНЕГОПАДА (тема newyear)
         ═══════════════════════════════════════════════════ */
@@ -701,21 +738,25 @@
             return (
                 <div className="max-w-2xl mx-auto w-full animate-fade-in">
                     <div className={`p-4 sm:p-6 rounded-xl border space-y-4 ${cardClass}`}>
-                        {/* Идентификатор эксперта */}
-                        <div className={`p-3 rounded-lg border ${t('bg-black/10 border-black/10', 'bg-white border-gray-200', 'bg-white border-pink-200', 'bg-white border-blue-200', 'bg-white border-emerald-200', 'bg-[#EFEBE9] border-[#D7CCC8]', 'bg-white border-gray-200')}`}>
-                            <div className="flex items-center justify-between mb-1">
-                                <label className={`text-xs font-bold flex items-center gap-1.5 ${accentClass}`}>
-                                    <IconUser size={14} /> Телефон / Логин эксперта
-                                </label>
-                                <span className="text-[10px] opacity-50">Ключ: expert_app_user_phone</span>
+                        {/* Идентификатор эксперта с ПИН-защитой */}
+                        <div className={`p-3 rounded-lg border flex items-center justify-between ${t('bg-black/10 border-black/10', 'bg-white border-gray-200', 'bg-white border-pink-200', 'bg-white border-blue-200', 'bg-white border-emerald-200', 'bg-[#EFEBE9] border-[#D7CCC8]', 'bg-white border-gray-200')}`}>
+                            <div className="flex items-center gap-2">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${t('bg-black/20 text-[#FFB300]', 'bg-amber-100 text-amber-800', 'bg-pink-100 text-pink-700', 'bg-blue-100 text-blue-700', 'bg-emerald-100 text-emerald-800', 'bg-[#D7CCC8] text-[#5D4037]', 'bg-red-100 text-[#C62828]')}`}>
+                                    <IconUser size={16} />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold leading-tight">
+                                        {formatPhoneMask(userPhone) || 'Эксперт не авторизован'}
+                                    </p>
+                                    <p className="text-[10px] opacity-60 flex items-center gap-1 mt-0.5">
+                                        <IconLock size={10} className="text-green-500" />
+                                        <span>ПИН-код активен (портал «Эксперт»)</span>
+                                    </p>
+                                </div>
                             </div>
-                            <input
-                                type="text"
-                                className={`w-full p-2 text-[16px] sm:text-sm rounded border transition-colors focus:outline-none focus:ring-2 ${inputClass}`}
-                                placeholder="+7 (999) 000-00-00 или логин"
-                                value={userPhone || ''}
-                                onChange={e => onUserPhoneChange(e.target.value)}
-                            />
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-green-500/10 text-green-500 font-bold border border-green-500/20">
+                                🔒 Защищено
+                            </span>
                         </div>
 
                         {/* Кнопки управления: Импорт xlsx и Сохранение в таблицу */}
@@ -1644,6 +1685,175 @@
         };
 
         /* ═══════════════════════════════════════════════════
+           9.1. КОМПОНЕНТ: ОКНО АВТОРИЗАЦИИ (ТЕЛЕФОН + ПИН-КОД)
+        ═══════════════════════════════════════════════════ */
+        const AuthModal = ({ initialPhone = '', initialPin = '', onLogin, isLoading, errorMsg, t }) => {
+            const [phoneInput, setPhoneInput] = useState(() => formatPhoneMask(initialPhone));
+            const [pinInput, setPinInput] = useState(() => normalizePin(initialPin));
+            const [localError, setLocalError] = useState('');
+
+            const cleanPhone = normalizePhone(phoneInput);
+            const cleanPin   = normalizePin(pinInput);
+            const canSubmit  = cleanPhone.length === 11 && cleanPin.length === 4 && !isLoading;
+
+            const handlePhoneChange = (e) => {
+                const formatted = formatPhoneMask(e.target.value);
+                setPhoneInput(formatted);
+                setLocalError('');
+            };
+
+            const handlePhoneFocus = () => {
+                if (!phoneInput) {
+                    setPhoneInput('+7 ');
+                }
+            };
+
+            const handlePinChange = (e) => {
+                const p = normalizePin(e.target.value);
+                setPinInput(p);
+                setLocalError('');
+            };
+
+            const handleSubmit = (e) => {
+                if (e) e.preventDefault();
+                if (cleanPhone.length !== 11) {
+                    setLocalError('Введите корректный номер телефона (11 цифр)');
+                    return;
+                }
+                if (cleanPin.length !== 4) {
+                    setLocalError('ПИН-код должен состоять из 4 цифр');
+                    return;
+                }
+                onLogin(cleanPhone, cleanPin);
+            };
+
+            const cardClass = t(
+                'bg-[#282B30] border-[#FFB300]',
+                'bg-white border-gray-300',
+                'bg-white border-pink-400',
+                'bg-white border-blue-600',
+                'bg-white border-emerald-600',
+                'bg-[#FDFBF7] border-[#8D6E63]',
+                'bg-white border-[#C62828]'
+            );
+
+            const overlayInput = t(
+                'bg-[#1E2125] border-gray-700 text-white focus:ring-[#FFB300] focus:border-[#FFB300]',
+                'bg-gray-50 border-gray-300 text-gray-900 focus:ring-amber-500 focus:border-amber-500',
+                'bg-pink-50 border-pink-200 text-pink-900 focus:ring-pink-400 focus:border-pink-400',
+                'bg-blue-50 border-blue-200 text-blue-900 focus:ring-blue-500 focus:border-blue-500',
+                'bg-emerald-50 border-emerald-200 text-emerald-900 focus:ring-emerald-500 focus:border-emerald-500',
+                'bg-[#EFEBE9] border-[#D7CCC8] text-[#3E2723] focus:ring-[#8D6E63] focus:border-[#8D6E63]',
+                'bg-gray-50 border-gray-300 text-gray-900 focus:ring-[#C62828] focus:border-[#C62828]'
+            );
+
+            const accentClass = t(
+                'text-[#FFB300]','text-amber-800','text-pink-600',
+                'text-blue-600','text-emerald-700','text-[#5D4037]','text-[#9A1B24]'
+            );
+
+            const btnPrimary = t(
+                'bg-[#FFB300] text-black hover:bg-[#FFA000]',
+                'bg-amber-600 text-white hover:bg-amber-700',
+                'bg-pink-500 text-white hover:bg-pink-600',
+                'bg-blue-600 text-white hover:bg-blue-700',
+                'bg-emerald-600 text-white hover:bg-emerald-700',
+                'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
+                'bg-[#C62828] text-white hover:bg-[#B71C1C]'
+            );
+
+            const displayError = errorMsg || localError;
+
+            return (
+                <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+                    <div className={`w-full max-w-sm rounded-2xl border-2 ${cardClass} shadow-2xl overflow-hidden`}>
+                        {/* Шапка модалки */}
+                        <div className={`p-4 border-b text-center ${t('border-gray-700','border-gray-200','border-pink-200','border-blue-200','border-emerald-200','border-[#D7CCC8]','border-gray-200')}`}>
+                            <div className="w-12 h-12 mx-auto mb-2 rounded-full flex items-center justify-center bg-black/10">
+                                <IconLock size={24} className={accentClass} />
+                            </div>
+                            <h3 className={`text-base font-black tracking-widest uppercase ${accentClass}`}>
+                                АВТОРИЗАЦИЯ
+                            </h3>
+                            <p className="text-xs opacity-60 mt-0.5">Вход в учётную запись эксперта</p>
+                        </div>
+
+                        {/* Тело формы */}
+                        <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4">
+                            {/* Ошибка wrong_pin или валидации */}
+                            {displayError && (
+                                <div className="p-3 rounded-lg bg-red-500/15 border border-red-500/40 text-red-500 text-xs font-bold flex items-start gap-2 animate-fade-in">
+                                    <IconAlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+                                    <span>{displayError}</span>
+                                </div>
+                            )}
+
+                            {/* Поле 1: Номер телефона */}
+                            <div>
+                                <label className="block text-xs font-bold mb-1 opacity-70">
+                                    Номер телефона
+                                </label>
+                                <input
+                                    type="tel"
+                                    inputMode="numeric"
+                                    maxLength={16}
+                                    placeholder="+7 999 000 00 00"
+                                    className={`w-full p-2.5 text-[16px] sm:text-sm rounded border font-mono transition-colors focus:outline-none focus:ring-2 ${overlayInput}`}
+                                    value={phoneInput}
+                                    onChange={handlePhoneChange}
+                                    onFocus={handlePhoneFocus}
+                                    autoComplete="tel"
+                                    disabled={isLoading}
+                                />
+                            </div>
+
+                            {/* Поле 2: ПИН-код */}
+                            <div>
+                                <label className="block text-xs font-bold mb-1 opacity-70 text-center">
+                                    ПИН-код (4 цифры)
+                                </label>
+                                <input
+                                    type="password"
+                                    inputMode="numeric"
+                                    maxLength={4}
+                                    placeholder="••••"
+                                    className={`w-full p-2.5 text-center text-xl tracking-[0.5em] font-mono font-bold rounded border transition-colors focus:outline-none focus:ring-2 ${overlayInput}`}
+                                    value={pinInput}
+                                    onChange={handlePinChange}
+                                    disabled={isLoading}
+                                />
+                                <p className="text-[11px] opacity-60 text-center mt-1.5 leading-snug">
+                                    Если входите впервые — придумайте любой 4-значный ПИН-код и запомните его
+                                </p>
+                            </div>
+
+                            {/* Кнопка входа */}
+                            <button
+                                type="submit"
+                                disabled={!canSubmit}
+                                className={`w-full min-h-[48px] py-3 text-sm font-black rounded-lg uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md ${
+                                    !canSubmit ? 'opacity-40 cursor-not-allowed bg-gray-500 text-white' : btnPrimary
+                                }`}
+                            >
+                                {isLoading ? (
+                                    <>
+                                        <IconRefresh size={16} className="animate-spin" />
+                                        <span>Проверка доступа...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <IconLock size={16} />
+                                        <span>ВОЙТИ В ПРИЛОЖЕНИЕ</span>
+                                    </>
+                                )}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        /* ═══════════════════════════════════════════════════
            10. КОМПОНЕНТ: ОКНО НАСТРОЕК
         ═══════════════════════════════════════════════════ */
         const SettingsModal = ({ theme, onThemeChange, settings, onSettingsChange, userPhone, onSwitchUser, onClose, t }) => {
@@ -1756,11 +1966,17 @@
                                     <span className="text-xs font-bold flex items-center gap-1.5">
                                         <IconUser size={14} className={accentClass} /> Эксперт (портал)
                                     </span>
-                                    <span className="text-xs font-mono font-bold opacity-80">
-                                        {userPhone || 'Не авторизован'}
+                                    <span className="text-xs font-mono font-bold opacity-90">
+                                        {formatPhoneMask(userPhone) || 'Не авторизован'}
                                     </span>
                                 </div>
-                                <div className="mt-2">
+                                {userPhone && (
+                                    <div className="flex items-center gap-1 text-[11px] text-green-500 font-semibold mb-2">
+                                        <IconLock size={12} />
+                                        <span>ПИН-код активен</span>
+                                    </div>
+                                )}
+                                <div className="mt-1">
                                     {!confirmSwitch ? (
                                         <button
                                             type="button"
@@ -1768,7 +1984,7 @@
                                             className="w-full min-h-[36px] py-1 px-2 rounded text-xs font-bold border border-gray-400 opacity-80 hover:opacity-100 flex items-center justify-center gap-1.5"
                                         >
                                             <IconLogOut size={14} />
-                                            <span>Сменить пользователя</span>
+                                            <span>Сменить аккаунт / Выйти</span>
                                         </button>
                                     ) : (
                                         <div className="flex gap-2 animate-fade-in">
@@ -1947,13 +2163,21 @@
             /* ── Тема ── */
             const [theme, setTheme] = useState(initTheme);
 
-            /* ── Идентификатор эксперта (телефон / логин) ── */
+            /* ── Идентификатор эксперта (телефон / ПИН-код) ── */
             const [userPhone, setUserPhone] = useState(() => {
-                return localStorage.getItem('expert_app_user_phone') || '';
+                return normalizePhone(localStorage.getItem('expert_app_user_phone') || '');
             });
-            const [loginInput, setLoginInput] = useState(() => {
-                return localStorage.getItem('expert_app_user_phone') || '';
+            const [userPin, setUserPin] = useState(() => {
+                return normalizePin(localStorage.getItem('expert_app_user_pin') || '');
             });
+            const [isAuthVerified, setIsAuthVerified] = useState(() => {
+                const p = normalizePhone(localStorage.getItem('expert_app_user_phone') || '');
+                const pin = normalizePin(localStorage.getItem('expert_app_user_pin') || '');
+                const verified = localStorage.getItem('expert_app_auth_verified');
+                return p.length === 11 && pin.length === 4 && verified === 'true';
+            });
+            const [authError, setAuthError] = useState('');
+            const [authLoading, setAuthLoading] = useState(false);
 
             /* ── Режим (официальный / автоподбор) ── */
             const [mode, setMode] = useState('official');
@@ -2064,18 +2288,41 @@
             }, [settings]);
 
             /* ── Загрузка данных пользователя из Google Таблицы ── */
-            const loadUserData = async (phoneToLoad) => {
+            const loadUserData = async (phoneToLoad, pinToLoad) => {
                 const phone = normalizePhone(phoneToLoad || userPhone);
+                const pin = normalizePin(pinToLoad || userPin);
                 const scriptUrl = settings.googleScriptUrl || DEFAULT_GOOGLE_SCRIPT_URL;
-                if (!phone || !scriptUrl) {
+
+                if (!phone || phone.length !== 11 || !pin || pin.length !== 4 || !scriptUrl) {
                     isHydratingRef.current = false;
-                    return;
+                    return false;
                 }
 
                 setCloudStatus('syncing');
                 setCloudErrorMsg('');
+                setAuthLoading(true);
                 try {
-                    const res = await callGoogleScript(scriptUrl, 'loadUserData', { userId: phone });
+                    const res = await callGoogleScript(scriptUrl, 'loadUserData', { userId: phone, pin: pin });
+
+                    // Обработка ошибки неверного ПИНа
+                    if (res && (res.status === 'wrong_pin' || res.error === 'wrong_pin')) {
+                        setIsAuthVerified(false);
+                        localStorage.removeItem('expert_app_auth_verified');
+                        setAuthError('Неверный ПИН-код! Этот номер уже зарегистрирован другим пользователем.');
+                        setCloudStatus('error');
+                        setCloudErrorMsg('Неверный ПИН-код');
+                        return false;
+                    }
+
+                    // Успешный вход
+                    localStorage.setItem('expert_app_user_phone', phone);
+                    localStorage.setItem('expert_app_user_pin', pin);
+                    localStorage.setItem('expert_app_auth_verified', 'true');
+                    setUserPhone(phone);
+                    setUserPin(pin);
+                    setIsAuthVerified(true);
+                    setAuthError('');
+
                     isHydratingRef.current = true;
                     userChangedProfileRef.current = false;
                     userChangedMonthRef.current = false;
@@ -2098,12 +2345,29 @@
                         setMonths(prev => ({ ...prev, ...loadedMonths }));
                     }
 
+                    // Если новый пользователь — сразу фиксируем userId и pin на листе Профили
+                    if (res && (res.status === 'not_found' || res.isNewUser)) {
+                        try {
+                            await callGoogleScript(scriptUrl, 'saveProfile', {
+                                userId: phone,
+                                pin: pin,
+                                profile: loadedProfile || profile
+                            });
+                        } catch (e) {
+                            console.warn('Не удалось зафиксировать профиль нового пользователя:', e);
+                        }
+                    }
+
                     setCloudStatus('saved');
+                    return true;
                 } catch (err) {
                     console.error('Ошибка загрузки данных из Google Таблицы:', err);
                     setCloudStatus('error');
                     setCloudErrorMsg(err.message || 'Ошибка загрузки данных');
+                    setAuthError('Ошибка подключения к Google Таблице: ' + (err.message || 'повторите попытку'));
+                    return false;
                 } finally {
+                    setAuthLoading(false);
                     setTimeout(() => {
                         isHydratingRef.current = false;
                     }, 500);
@@ -2112,24 +2376,17 @@
 
             /* ── Первичная инициализация при старте ── */
             useEffect(() => {
-                if (userPhone) {
-                    loadUserData(userPhone);
+                if (isAuthVerified && userPhone && userPin) {
+                    loadUserData(userPhone, userPin);
                 } else {
                     isHydratingRef.current = false;
                 }
             }, []);
 
-            /* ── Вход пользователя ── */
-            const handleLogin = async (phoneInput) => {
-                const clean = normalizePhone(phoneInput);
-                if (!clean) {
-                    alert('Пожалуйста, введите номер телефона или логин');
-                    return;
-                }
-                localStorage.setItem('expert_app_user_phone', clean);
-                setUserPhone(clean);
-                setLoginInput(clean);
-                await loadUserData(clean);
+            /* ── Вход пользователя по связке Телефон + ПИН ── */
+            const handleLogin = async (cleanPhone, cleanPin) => {
+                setAuthError('');
+                await loadUserData(cleanPhone, cleanPin);
             };
 
             /* ── Смена пользователя (безопасный сброс) ── */
@@ -2137,6 +2394,8 @@
                 if (profileDebounceRef.current) clearTimeout(profileDebounceRef.current);
                 if (monthDebounceRef.current) clearTimeout(monthDebounceRef.current);
                 localStorage.removeItem('expert_app_user_phone');
+                localStorage.removeItem('expert_app_user_pin');
+                localStorage.removeItem('expert_app_auth_verified');
                 Object.keys(localStorage)
                     .filter(k => k.startsWith('expert_report_'))
                     .forEach(k => localStorage.removeItem(k));
@@ -2146,17 +2405,25 @@
             /* ── Сохранение профиля в Google Таблицу ── */
             const saveProfileCloud = async (customProfile) => {
                 const phone = normalizePhone(userPhone);
+                const pin = normalizePin(userPin);
                 const scriptUrl = settings.googleScriptUrl || DEFAULT_GOOGLE_SCRIPT_URL;
-                if (!phone || !scriptUrl) return;
+                if (!isAuthVerified || !phone || phone.length !== 11 || !pin || pin.length !== 4 || !scriptUrl) return;
 
                 const dataToSave = customProfile || profile;
                 setCloudStatus('syncing');
                 setCloudErrorMsg('');
                 try {
-                    await callGoogleScript(scriptUrl, 'saveProfile', {
+                    const res = await callGoogleScript(scriptUrl, 'saveProfile', {
                         userId: phone,
+                        pin: pin,
                         profile: dataToSave
                     });
+                    if (res && (res.status === 'wrong_pin' || res.error === 'wrong_pin')) {
+                        setIsAuthVerified(false);
+                        localStorage.removeItem('expert_app_auth_verified');
+                        setAuthError('Неверный ПИН-код! Этот номер уже зарегистрирован другим пользователем.');
+                        return;
+                    }
                     setCloudStatus('saved');
                 } catch (err) {
                     console.error('Ошибка сохранения профиля:', err);
@@ -2168,8 +2435,9 @@
             /* ── Сохранение месяца в Google Таблицу ── */
             const saveMonthCloud = async (customMonthData, customKey) => {
                 const phone = normalizePhone(userPhone);
+                const pin = normalizePin(userPin);
                 const scriptUrl = settings.googleScriptUrl || DEFAULT_GOOGLE_SCRIPT_URL;
-                if (!phone || !scriptUrl) return;
+                if (!isAuthVerified || !phone || phone.length !== 11 || !pin || pin.length !== 4 || !scriptUrl) return;
 
                 const mData = customMonthData || currentMonthData;
                 const mKey = customKey || currentMonthKey;
@@ -2184,12 +2452,19 @@
                 setCloudStatus('syncing');
                 setCloudErrorMsg('');
                 try {
-                    await callGoogleScript(scriptUrl, 'saveMonth', {
+                    const res = await callGoogleScript(scriptUrl, 'saveMonth', {
                         userId: phone,
+                        pin: pin,
                         yearMonth: mKey,
                         summary: summary,
                         monthData: mData
                     });
+                    if (res && (res.status === 'wrong_pin' || res.error === 'wrong_pin')) {
+                        setIsAuthVerified(false);
+                        localStorage.removeItem('expert_app_auth_verified');
+                        setAuthError('Неверный ПИН-код! Этот номер уже зарегистрирован другим пользователем.');
+                        return;
+                    }
                     setCloudStatus('saved');
                 } catch (err) {
                     console.error('Ошибка сохранения месяца:', err);
@@ -2201,7 +2476,7 @@
             /* ── Debounce автосохранения профиля (1500 мс) ── */
             useEffect(() => {
                 localStorage.setItem('expert_report_profile', JSON.stringify(profile));
-                if (isHydratingRef.current || !userChangedProfileRef.current || !userPhone) {
+                if (isHydratingRef.current || !isAuthVerified || !userChangedProfileRef.current || !userPhone || !userPin) {
                     return;
                 }
                 if (profileDebounceRef.current) clearTimeout(profileDebounceRef.current);
@@ -2212,12 +2487,12 @@
                 return () => {
                     if (profileDebounceRef.current) clearTimeout(profileDebounceRef.current);
                 };
-            }, [profile]);
+            }, [profile, isAuthVerified]);
 
             /* ── Debounce автосохранения месяца (2000 мс) ── */
             useEffect(() => {
                 localStorage.setItem('expert_report_months', JSON.stringify(months));
-                if (isHydratingRef.current || !userChangedMonthRef.current || !userPhone) {
+                if (isHydratingRef.current || !isAuthVerified || !userChangedMonthRef.current || !userPhone || !userPin) {
                     return;
                 }
                 if (monthDebounceRef.current) clearTimeout(monthDebounceRef.current);
@@ -2228,7 +2503,7 @@
                 return () => {
                     if (monthDebounceRef.current) clearTimeout(monthDebounceRef.current);
                 };
-            }, [months, currentMonthKey]);
+            }, [months, currentMonthKey, isAuthVerified]);
 
             /* ── Перенос входящих остатков с прошлого месяца ── */
             const applyPrevMonthBalances = useCallback((targetYear, targetMonth, force = false) => {
@@ -2282,12 +2557,12 @@
 
             /* ── Автоперенос при выборе месяца с 0 остатками ── */
             useEffect(() => {
-                if (isHydratingRef.current) return;
+                if (isHydratingRef.current || !isAuthVerified) return;
                 const mData = currentMonthData;
                 if ((Number(mData.odometerStart) || 0) === 0 && (Number(mData.fuelStart) || 0) === 0) {
                     applyPrevMonthBalances(mData.year, mData.month, false);
                 }
-            }, [currentMonthKey, isHydratingRef.current]);
+            }, [currentMonthKey, isHydratingRef.current, isAuthVerified]);
 
             /* ── Хелпер темы ── */
             const t = makeT(theme);
@@ -2430,52 +2705,6 @@
                         </div>
                     </header>
 
-                    {/* ══ ПЛАШКА ПЕРВИЧНОГО ВХОДА (если номер не задан) ══ */}
-                    {!userPhone && (
-                        <div className={`p-3 sm:p-4 border-b ${t(
-                            'bg-amber-500/10 border-amber-500/30 text-amber-200',
-                            'bg-amber-50 border-amber-200 text-amber-900',
-                            'bg-pink-50 border-pink-200 text-pink-900',
-                            'bg-blue-50 border-blue-200 text-blue-900',
-                            'bg-emerald-50 border-emerald-200 text-emerald-900',
-                            'bg-[#F5F2EE] border-[#8D6E63] text-[#5D4037]',
-                            'bg-[#FCE8E8] border-[#C62828] text-[#9A1B24]'
-                        )}`}>
-                            <div className="max-w-4xl mx-auto w-full px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-                                <div>
-                                    <p className="text-xs font-bold mb-0.5">Вход эксперта (портал «Эксперт»)</p>
-                                    <p className="text-[11px] opacity-75">
-                                        Введите телефон или логин для загрузки карточки и сохранения месяцев в Google Таблицу.
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-2 w-full sm:w-auto">
-                                    <input
-                                        type="text"
-                                        value={loginInput}
-                                        onChange={e => setLoginInput(e.target.value)}
-                                        placeholder="+7 (999) 000-00-00"
-                                        className={`p-2 text-[16px] sm:text-xs rounded border flex-1 sm:w-48 ${t(
-                                            'bg-[#1E2125] border-gray-700 text-white',
-                                            'bg-white border-gray-300 text-gray-900',
-                                            'bg-pink-50 border-pink-200 text-pink-900',
-                                            'bg-blue-50 border-blue-200 text-blue-900',
-                                            'bg-emerald-50 border-emerald-200 text-emerald-900',
-                                            'bg-[#EFEBE9] border-[#D7CCC8] text-[#3E2723]',
-                                            'bg-white border-gray-300 text-gray-900'
-                                        )}`}
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => handleLogin(loginInput)}
-                                        className={`px-3 py-2 min-h-[40px] text-xs font-bold rounded flex items-center gap-1.5 whitespace-nowrap ${btnPrimary}`}
-                                    >
-                                        <span>Войти и загрузить</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
                     {/* ══ ВКЛАДКИ (только в официальном режиме) ══ */}
                     {mode === 'official' && (
                         <div className={`flex-shrink-0 border-b ${t('border-[#3A3D42] bg-[#1A1D21]','border-gray-200 bg-white','border-pink-200 bg-white','border-blue-200 bg-white','border-emerald-200 bg-white','border-[#D7CCC8] bg-[#FDFBF7]','border-gray-200 bg-white')}`}>
@@ -2514,12 +2743,6 @@
                                     profile={profile}
                                     onChange={updateProfile}
                                     userPhone={userPhone}
-                                    onUserPhoneChange={phone => {
-                                        const clean = normalizePhone(phone);
-                                        setUserPhone(clean);
-                                        setLoginInput(clean);
-                                        localStorage.setItem('expert_app_user_phone', clean);
-                                    }}
                                     onSaveCloud={() => saveProfileCloud(profile)}
                                     cloudStatus={cloudStatus}
                                     t={t}
@@ -2547,6 +2770,18 @@
                             )}
                         </div>
                     </main>
+
+                    {/* ══ МОДАЛКА АВТОРИЗАЦИИ (ТЕЛЕФОН + ПИН) ══ */}
+                    {!isAuthVerified && (
+                        <AuthModal
+                            initialPhone={userPhone}
+                            initialPin={userPin}
+                            onLogin={handleLogin}
+                            isLoading={authLoading}
+                            errorMsg={authError}
+                            t={t}
+                        />
+                    )}
 
                     {/* ══ МОДАЛКА НАСТРОЕК ══ */}
                     {showSettings && (
