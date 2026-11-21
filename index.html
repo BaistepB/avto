@@ -5019,9 +5019,10 @@
 
                 Object.entries(routePreviewMap).forEach(([dateKey, routeInfo]) => {
                     if (wd[dateKey] && Array.isArray(routeInfo?.trips) && routeInfo.trips.length > 0) {
-                        const newKm = (routeInfo.fitApplied && typeof routeInfo.actualKm === 'number')
+                        const rawKm = (routeInfo.fitApplied && typeof routeInfo.actualKm === 'number')
                             ? routeInfo.actualKm
                             : (Number(wd[dateKey].tripKm) || routeInfo.targetKm || 0);
+                        const newKm = Math.round(rawKm);
 
                         wd[dateKey] = {
                             ...wd[dateKey],
@@ -5115,7 +5116,7 @@
                         }
 
                         // Одометр и заправки: только рабочие дни
-                        let currentOdo = Number(mData.odometerStart) || 0;
+                        let currentOdo = Math.round(Number(mData.odometerStart) || 0);
                         for (let d = 1; d <= 31; d++) {
                             const row = d + 4;
                             const dateKey = toDateStr(year, month, d);
@@ -5126,11 +5127,18 @@
                                 .reduce((s, r) => s + (Number(r.liters) || 0), 0);
 
                             if (isWorking) {
-                                const tripKm = Number(dayObj.tripKm) || 0;
-                                wsCalc.getCell(`C${row}`).value = currentOdo;
-                                wsCalc.getCell(`D${row}`).value = currentOdo + tripKm;
-                                wsCalc.getCell(`G${row}`).value = refuelLiters > 0 ? refuelLiters : 0;
-                                currentOdo += tripKm;
+                                const kmInt = Math.round(Number(dayObj.tripKm) || 0);
+                                // Пропускаем дни с 0 км и без заправки — не пишем одометр
+                                if (kmInt === 0 && refuelLiters === 0) {
+                                    wsCalc.getCell(`C${row}`).value = null;
+                                    wsCalc.getCell(`D${row}`).value = null;
+                                    wsCalc.getCell(`G${row}`).value = null;
+                                } else {
+                                    wsCalc.getCell(`C${row}`).value = currentOdo;
+                                    wsCalc.getCell(`D${row}`).value = currentOdo + kmInt;
+                                    wsCalc.getCell(`G${row}`).value = refuelLiters > 0 ? refuelLiters : 0;
+                                    currentOdo += kmInt;
+                                }
                             } else {
                                 wsCalc.getCell(`C${row}`).value = null;
                                 wsCalc.getCell(`D${row}`).value = null;
@@ -5147,28 +5155,32 @@
                         const dateKey = toDateStr(year, month, d);
                         const dayObj = (mData.workdays || {})[dateKey];
                         const isWorking = dayObj && dayObj.isWorkday && d <= totalDays;
+                        const kmInt = isWorking ? Math.round(Number(dayObj.tripKm) || 0) : 0;
 
-                        // Строки маршрута B64..B93 (до 30 точек)
+                        // Очищаем строки маршрута B64..B93 перед записью
                         for (let rowIdx = 64; rowIdx <= 93; rowIdx++) {
                             wsDay.getCell(`B${rowIdx}`).value = null;
                         }
 
-                        if (isWorking && Array.isArray(dayObj.trips) && dayObj.trips.length > 0) {
-                            const startPoint = p.startPoint || '';
-                            // Маршрут-петля: startPoint → ...trips → startPoint
-                            const routePoints = [startPoint];
-                            dayObj.trips.forEach(tr => {
-                                if (tr.to && tr.to !== startPoint) routePoints.push(tr.to);
-                            });
-                            if (routePoints[routePoints.length - 1] !== startPoint) {
-                                routePoints.push(startPoint);
+                        if (isWorking && kmInt > 0 && Array.isArray(dayObj.trips) && dayObj.trips.length > 0) {
+                            const startPoint = (p.startPoint || '').trim();
+                            // Строим список адресов маршрута-петли
+                            const routeAddresses = [];
+                            // 1. Точка старта
+                            routeAddresses.push(startPoint);
+                            // 2. Промежуточные точки (поддержка объектов {address} и строк)
+                            const intermediates = dayObj.trips
+                                .map(tr => typeof tr === 'string' ? tr.trim() : (tr.address || tr.to || '').trim())
+                                .filter(addr => addr.length > 0);
+                            // Обрезаем до 28 промежуточных (оставляем место для старта + возврата)
+                            intermediates.slice(0, 28).forEach(addr => routeAddresses.push(addr));
+                            // 3. Возврат в точку старта
+                            if (startPoint && routeAddresses[routeAddresses.length - 1] !== startPoint) {
+                                routeAddresses.push(startPoint);
                             }
-                            // Обрезаем до 30 точек
-                            const points = routePoints.slice(0, 30);
-                            points.forEach((pt, idx) => {
-                                if (64 + idx <= 93) {
-                                    wsDay.getCell(`B${64 + idx}`).value = pt;
-                                }
+                            // Записываем: максимум 30 строк (B64..B93)
+                            routeAddresses.slice(0, 30).forEach((addr, idx) => {
+                                wsDay.getCell(`B${64 + idx}`).value = addr;
                             });
                         }
                     }
