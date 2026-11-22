@@ -4422,40 +4422,12 @@
            10. КОМПОНЕНТ: ОКНО НАСТРОЕК
         ═══════════════════════════════════════════════════ */
         const SettingsModal = ({ theme, onThemeChange, settings, onSettingsChange, userPhone, onSwitchUser, onClose, t }) => {
-            const [localSettings, setLocalSettings] = useState(() => ({
-                ...settings,
-                googleScriptUrl: settings.googleScriptUrl || DEFAULT_GOOGLE_SCRIPT_URL
-            }));
             const [confirmReset, setConfirmReset] = useState(false);
             const [confirmSwitch, setConfirmSwitch] = useState(false);
-            const [pingStatus, setPingStatus] = useState(null); // 'loading' | 'success' | 'error'
-            const [pingMsg, setPingMsg] = useState('');
 
             const themeIdx  = THEME_LIST.findIndex(x => x.id === theme);
             const prevTheme = () => onThemeChange(THEME_LIST[(themeIdx - 1 + THEME_LIST.length) % THEME_LIST.length].id);
             const nextTheme = () => onThemeChange(THEME_LIST[(themeIdx + 1) % THEME_LIST.length].id);
-
-            const handlePing = async () => {
-                setPingStatus('loading');
-                setPingMsg('');
-                try {
-                    const url = localSettings.googleScriptUrl || DEFAULT_GOOGLE_SCRIPT_URL;
-                    const res = await callGoogleScript(url, 'ping');
-                    setPingStatus('success');
-                    setPingMsg(res && res.message ? `Подключено: ${res.message}` : 'Подключено ✓');
-                } catch (err) {
-                    setPingStatus('error');
-                    setPingMsg(err.message || 'Ошибка связи');
-                }
-            };
-
-            const save = () => {
-                onSettingsChange({
-                    ...localSettings,
-                    googleScriptUrl: localSettings.googleScriptUrl || DEFAULT_GOOGLE_SCRIPT_URL
-                });
-                onClose();
-            };
 
             const resetReportData = () => {
                 Object.keys(localStorage)
@@ -4475,15 +4447,6 @@
                 'bg-white border-emerald-600',
                 'bg-[#FDFBF7] border-[#8D6E63]',
                 'bg-white border-[#C62828]'
-            );
-            const overlayInput = t(
-                'bg-[#1E2125] border-gray-700 text-white',
-                'bg-gray-50 border-gray-300 text-gray-900',
-                'bg-pink-50 border-pink-200 text-pink-900',
-                'bg-blue-50 border-blue-200 text-blue-900',
-                'bg-emerald-50 border-emerald-200 text-emerald-900',
-                'bg-[#EFEBE9] border-[#D7CCC8] text-[#3E2723]',
-                'bg-gray-50 border-gray-300 text-gray-900'
             );
             const accentClass = t(
                 'text-[#FFB300]','text-amber-800','text-pink-600',
@@ -4597,76 +4560,6 @@
                                 </div>
                             </div>
 
-                            {/* Google Apps Script URL с кнопкой проверки */}
-                            <div>
-                                <div className="flex items-center justify-between mb-1">
-                                    <label className="text-xs font-bold opacity-70">URL Google Apps Script</label>
-                                    <button
-                                        type="button"
-                                        onClick={() => setLocalSettings({ ...localSettings, googleScriptUrl: DEFAULT_GOOGLE_SCRIPT_URL })}
-                                        className="text-[10px] opacity-60 hover:opacity-100 underline"
-                                    >
-                                        Сбросить URL
-                                    </button>
-                                </div>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="url"
-                                        className={`flex-1 p-2 text-[16px] sm:text-sm rounded border ${overlayInput}`}
-                                        placeholder="https://script.google.com/macros/s/..."
-                                        value={localSettings.googleScriptUrl || ''}
-                                        onChange={e => {
-                                            setLocalSettings({ ...localSettings, googleScriptUrl: e.target.value });
-                                            setPingStatus(null);
-                                        }}
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={handlePing}
-                                        disabled={pingStatus === 'loading'}
-                                        className={`px-3 py-2 min-h-[40px] text-xs font-bold rounded flex items-center gap-1 border transition-all ${
-                                            pingStatus === 'loading' ? 'opacity-50' : ''
-                                        } ${t(
-                                            'border-[#FFB300]/60 text-[#FFB300] hover:bg-[#1E2125]',
-                                            'border-amber-500 text-amber-800 hover:bg-amber-50',
-                                            'border-pink-400 text-pink-700 hover:bg-pink-50',
-                                            'border-blue-500 text-blue-700 hover:bg-blue-50',
-                                            'border-emerald-500 text-emerald-800 hover:bg-emerald-50',
-                                            'border-[#8D6E63] text-[#5D4037] hover:bg-[#EFEBE9]',
-                                            'border-[#C62828] text-[#9A1B24] hover:bg-red-50'
-                                        )}`}
-                                    >
-                                        <IconRefresh size={13} className={pingStatus === 'loading' ? 'animate-spin' : ''} />
-                                        <span>{pingStatus === 'loading' ? '...' : 'Проверить связь'}</span>
-                                    </button>
-                                </div>
-                                {pingStatus === 'success' && (
-                                    <p className="text-xs text-green-500 font-bold mt-1.5 flex items-center gap-1">
-                                        <IconCheck size={14} /> {pingMsg || 'Подключено'}
-                                    </p>
-                                )}
-                                {pingStatus === 'error' && (
-                                    <p className="text-xs text-red-500 font-bold mt-1.5 flex items-center gap-1">
-                                        <IconAlertTriangle size={14} /> {pingMsg || 'Ошибка подключения'}
-                                    </p>
-                                )}
-                            </div>
-
-                            {/* Ключ Яндекс Карт */}
-                            <div>
-                                <label className="block text-xs font-bold mb-1 opacity-70">Ключ API Яндекс Карт</label>
-                                <input
-                                    type="password"
-                                    className={`w-full p-2 text-[16px] sm:text-sm rounded border font-mono ${overlayInput}`}
-                                    placeholder="Ключ из developer.tech.yandex.ru"
-                                    value={localSettings.yandexApiKey || ''}
-                                    onChange={e => setLocalSettings({ ...localSettings, yandexApiKey: e.target.value })}
-                                />
-                            </div>
-
-                            {/* Разделитель */}
-                            <div className={`border-t my-1 ${t('border-gray-700','border-gray-200','border-pink-200','border-blue-200','border-emerald-200','border-[#D7CCC8]','border-gray-200')}`} />
-
                             {/* Сброс данных */}
                             <div className={`p-3 rounded-lg border ${t('bg-red-950/20 border-red-900/40','bg-red-50 border-red-200','bg-red-50 border-red-200','bg-red-50 border-red-200','bg-red-50 border-red-200','bg-red-50 border-red-200','bg-red-50 border-red-200')}`}>
                                 <div className="flex items-start gap-2 mb-2">
@@ -4708,10 +4601,10 @@
                             <div className="flex items-center justify-between pt-1">
                                 <span className="text-[11px] font-mono opacity-40">v{APP_VERSION}</span>
                                 <button
-                                    onClick={save}
+                                    onClick={onClose}
                                     className={`px-5 py-2 min-h-[40px] text-sm font-black rounded ${btnPrimary}`}
                                 >
-                                    СОХРАНИТЬ И ЗАКРЫТЬ
+                                    ЗАКРЫТЬ
                                 </button>
                             </div>
                         </div>
