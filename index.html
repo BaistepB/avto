@@ -322,6 +322,66 @@
             return angleDiffDeg(startBearing, candBearing) <= maxAngle;
         };
 
+        /** Нормализация адреса для запроса к Nominatim (OSM) */
+        const cleanAddressForNominatim = (raw) => {
+            if (!raw) return '';
+            let s = String(raw).trim();
+
+            // 1. Пробел после точки в сокращениях (г.Москва -> г. Москва, ул.Ленина -> ул. Ленина, д.15 -> д. 15)
+            s = s.replace(/([а-яa-zё]{1,5})\.([а-яa-zё0-9])/gi, '$1. $2');
+
+            // 2. Убираем квартиры/офисы/помещения/подъезды и их номера
+            s = s.replace(/(?:кв|квартира|оф|офис|пом|помещение|подъезд|эт|этаж)\.?\s*\d+/gi, ' ');
+
+            // 3. Убираем явные корп./стр./строение/корпус с номерами
+            s = s.replace(/(?:корп|корпус|стр|строение)\.?\s*\d+/gi, ' ');
+
+            // Слитные корпуса/строения: 2к2 -> 2, 15с1 -> 15, 8стр2 -> 8, 44а -> 44
+            s = s.replace(/(\d+)[кс/\\-]\d+/gi, '$1');
+            s = s.replace(/(\d+)[а-яёa-z]\b/gi, '$1');
+
+            // 4. Убираем префиксы областей, "МО", "г.", "д."
+            s = s.replace(/(?:^|[\s,;])(?:московская\s+обл(?:асть)?|обл(?:асть)?\s+московская|мо)(?:[\s,;]|$)/gi, ' ');
+            s = s.replace(/(?:^|[\s,;])(?:г|гор|город|пос|пгт|дп|рп|село|с|деревня|дер)\.\s*/gi, ' ');
+            s = s.replace(/(?:^|[\s,;])(?:д|дом)\.\s*/gi, ' ');
+
+            // 5. Очищаем лишние запятые, тире, множественные пробелы
+            s = s.replace(/[,;]+/g, ' ');
+            s = s.replace(/\s+/g, ' ').trim();
+
+            return s;
+        };
+
+        /** Определение наименования сектора старта (8 румбов относительно центра Москвы) */
+        const getSectorLabel = (coords) => {
+            if (!coords) return 'Не определено';
+            const dist = haversineKm(MOSCOW_CENTER, coords);
+            if (dist < 5) return 'Центр Москвы';
+
+            const bearing = getBearingDeg(MOSCOW_CENTER, coords);
+            const compass = [
+                { label: 'Север', min: 337.5, max: 22.5 },
+                { label: 'Северо-Восток', min: 22.5, max: 67.5 },
+                { label: 'Восток', min: 67.5, max: 112.5 },
+                { label: 'Юго-Восток', min: 112.5, max: 157.5 },
+                { label: 'Юг', min: 157.5, max: 202.5 },
+                { label: 'Юго-Запад', min: 202.5, max: 247.5 },
+                { label: 'Запад', min: 247.5, max: 292.5 },
+                { label: 'Северо-Запад', min: 292.5, max: 337.5 }
+            ];
+
+            let direction = 'Север';
+            if (bearing >= 337.5 || bearing < 22.5) {
+                direction = 'Север';
+            } else {
+                const found = compass.find(c => bearing >= c.min && bearing < c.max);
+                if (found) direction = found.label;
+            }
+
+            const region = dist <= 20 ? 'Москвы' : 'МО';
+            return `${direction} ${region}`;
+        };
+
         /** Поиск приблизительных координат адреса (офлайн-fallback) */
         const findApproxCoords = (addr) => {
             const str = String(addr || '').toLowerCase();
@@ -354,38 +414,40 @@
             return { lat: 55.7512 + latOffset, lon: 37.6184 + lonOffset };
         };
 
-        /** Асинхронное геокодирование адреса: кэш -> пул/офис -> Яндекс -> Nominatim -> fallback */
-        const geocodeAddress = async (address, yandexApiKey) => {
+        /** Асинхронное геокодирование адреса: кэш -> пул/офис -> Яндекс -> Nominatim (2 попытки) -> fallback */
+        const geocodeAddress = async (address, yandexApiKey, forceRefresh = false) => {
             const raw = String(address || '').trim();
             if (!raw) return null;
             const key = normalizeGeoKey(raw);
             const cache = getGeoCache();
-            if (cache[key] && typeof cache[key].lat === 'number' && typeof cache[key].lon === 'number') {
+
+            // 1. Чтение из кэша: только если !forceRefresh и запись проверена (verified: true)
+            if (!forceRefresh && cache[key] && cache[key].verified === true && typeof cache[key].lat === 'number' && typeof cache[key].lon === 'number') {
                 return cache[key];
             }
 
-            // 1. Поиск в офисе по умолчанию
+            // 2. Поиск в офисе по умолчанию (всегда verified: true)
             const cleanOffice = normalizeGeoKey(DEFAULT_OFFICE_ADDRESS.address);
             if (key === cleanOffice || key.includes('бутырская') || key.includes('склад') || key.includes('офис')) {
-                const res = { lat: DEFAULT_OFFICE_ADDRESS.lat, lon: DEFAULT_OFFICE_ADDRESS.lon };
+                const res = { lat: DEFAULT_OFFICE_ADDRESS.lat, lon: DEFAULT_OFFICE_ADDRESS.lon, verified: true };
                 cache[key] = res;
                 saveGeoCache(cache);
                 return res;
             }
 
-            // 2. Поиск в пуле MOSCOW_MO_ADDRESS_POOL
+            // 3. Поиск в пуле MOSCOW_MO_ADDRESS_POOL (всегда verified: true)
             const matchInPool = MOSCOW_MO_ADDRESS_POOL.find(p => {
                 const pk = normalizeGeoKey(p.address);
                 return pk === key || key.includes(pk) || pk.includes(key);
             });
             if (matchInPool) {
-                const res = { lat: matchInPool.lat, lon: matchInPool.lon };
+                const res = { lat: matchInPool.lat, lon: matchInPool.lon, verified: true };
                 cache[key] = res;
                 saveGeoCache(cache);
                 return res;
             }
 
-            // 3. Запрос к Яндекс Геокодеру (если задан API-ключ) с таймаутом 3 сек через AbortController
+            // 4. Запрос к Яндекс Геокодеру (если задан API-ключ) с таймаутом 3 сек
             if (yandexApiKey && String(yandexApiKey).trim().length > 5) {
                 try {
                     const controller = new AbortController();
@@ -402,7 +464,7 @@
                             const lat = parseFloat(latStr);
                             const lon = parseFloat(lonStr);
                             if (!isNaN(lat) && !isNaN(lon)) {
-                                const res = { lat, lon };
+                                const res = { lat, lon, verified: true };
                                 cache[key] = res;
                                 saveGeoCache(cache);
                                 return res;
@@ -414,38 +476,50 @@
                 }
             }
 
-            // 4. Запрос к Nominatim OSM с таймаутом 3 сек через AbortController
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 3000);
-                const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ru&q=${encodeURIComponent(raw)}`;
-                const resp = await fetch(url, {
-                    headers: { 'Accept-Language': 'ru' },
-                    signal: controller.signal
-                });
-                clearTimeout(timeoutId);
-                if (resp.ok) {
-                    const data = await resp.json();
-                    if (Array.isArray(data) && data.length > 0) {
-                        const lat = parseFloat(data[0].lat);
-                        const lon = parseFloat(data[0].lon);
-                        if (!isNaN(lat) && !isNaN(lon)) {
-                            const res = { lat, lon };
-                            cache[key] = res;
-                            saveGeoCache(cache);
-                            return res;
-                        }
-                    }
-                }
-            } catch (e) {
-                console.warn('Nominatim таймаут или недоступен:', e.message);
+            // 5. Запрос к Nominatim OSM (до 2 попыток: попытка 1 - чистый адрес с домом, попытка 2 - город + улица)
+            const cleanedQuery = cleanAddressForNominatim(raw);
+            const queries = [cleanedQuery];
+            const streetOnly = cleanedQuery.replace(/\s+\d+(?:[\s/\\-]*\d+)*$/, '').trim();
+            if (streetOnly && streetOnly !== cleanedQuery) {
+                queries.push(streetOnly);
             }
 
-            // 5. Детерминированный fallback
+            for (let attempt = 0; attempt < queries.length; attempt++) {
+                const q = queries[attempt];
+                if (!q) continue;
+                if (attempt > 0) {
+                    await new Promise(r => setTimeout(r, 300));
+                }
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 3500);
+                    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ru&q=${encodeURIComponent(q)}`;
+                    const resp = await fetch(url, {
+                        headers: { 'Accept-Language': 'ru' },
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        if (Array.isArray(data) && data.length > 0) {
+                            const lat = parseFloat(data[0].lat);
+                            const lon = parseFloat(data[0].lon);
+                            if (!isNaN(lat) && !isNaN(lon)) {
+                                const res = { lat, lon, verified: true };
+                                cache[key] = res;
+                                saveGeoCache(cache);
+                                return res;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`Nominatim попытка ${attempt + 1} (${q}):`, e.message);
+                }
+            }
+
+            // 6. Офлайн fallback: возвращаем с verified: false и НЕ сохраняем в geoCache/localStorage
             const approx = findApproxCoords(raw);
-            cache[key] = approx;
-            saveGeoCache(cache);
-            return approx;
+            return { ...approx, verified: false };
         };
 
         /** Пакетный расчёт реальной дорожной петли через OSRM: Старт -> точки -> Финиш */
@@ -2838,6 +2912,7 @@
             const [generationProgress, setGenerationProgress] = useState('');
             const [hasAnyOsrmRoutes, setHasAnyOsrmRoutes] = useState(false);
             const [isCalculatingRouteKm, setIsCalculatingRouteKm] = useState(false);
+            const [detectedStartInfo, setDetectedStartInfo] = useState(null);
 
             const odometerStart = Number(monthData.odometerStart) || 0;
             const fuelStart     = Number(monthData.fuelStart) || 0;
@@ -3535,6 +3610,13 @@
 
                     // 1. Геокодируем точку старта
                     const startCoords = await geocodeAddress(startPoint, yandexKey);
+                    const startSectorLabel = getSectorLabel(startCoords);
+                    setDetectedStartInfo({
+                        label: startSectorLabel,
+                        lat: startCoords?.lat,
+                        lon: startCoords?.lon,
+                        verified: startCoords?.verified !== false
+                    });
 
                     // 2. Геокодируем адреса из личного справочника (с вежливой паузой 250 мс для внешних запросов)
                     const userAddressesWithCoords = [];
@@ -3877,6 +3959,7 @@
                     onApplyRoutes(routePreviewMap);
                 }
                 setRoutePreviewMap(null);
+                setDetectedStartInfo(null);
             };
 
             /* ── Подсказка по диапазону дней ── */
@@ -4516,12 +4599,31 @@
                                         </div>
                                         <button
                                             type="button"
-                                            onClick={() => setRoutePreviewMap(null)}
+                                            onClick={() => { setRoutePreviewMap(null); setDetectedStartInfo(null); }}
                                             className="text-xs opacity-50 hover:opacity-100 underline"
                                         >
                                             Сбросить предпросмотр
                                         </button>
                                     </div>
+
+                                    {/* Индикатор определённого сектора точки старта */}
+                                    {detectedStartInfo && (
+                                        detectedStartInfo.verified ? (
+                                            <div className="p-2.5 rounded-lg text-xs flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-medium">
+                                                <span className="flex-shrink-0">📍</span>
+                                                <span>
+                                                    Точка старта: <strong>{detectedStartInfo.label}</strong> ({Number(detectedStartInfo.lat).toFixed(2)}, {Number(detectedStartInfo.lon).toFixed(2)}) — маршруты подобраны в вашем секторе
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <div className="p-2.5 rounded-lg text-xs flex items-center gap-2 bg-amber-500/15 border border-amber-500/30 text-amber-400 font-medium">
+                                                <span className="flex-shrink-0">⚠️</span>
+                                                <span>
+                                                    Не удалось точно определить адрес точки старта на карте — проверьте написание адреса в Карточке сотрудника
+                                                </span>
+                                            </div>
+                                        )
+                                    )}
 
                                     <div className="max-h-72 overflow-y-auto border rounded text-xs">
                                         <table className="w-full border-collapse">
