@@ -1519,7 +1519,7 @@
         /* ═══════════════════════════════════════════════════
            8. КОМПОНЕНТ: НАСТРОЙКА МЕСЯЦА + РАБОЧИЕ ДНИ
         ═══════════════════════════════════════════════════ */
-        const MonthSetup = ({ monthData, profile, onUpdate, allMonths, onUpdateAllMonths, onChangeMonthKey, onPullPrevMonth, onSaveMonthCloud, onLoadMonthCloud, onExportExcel, cloudStatus, userPhone, t }) => {
+        const MonthSetup = ({ monthData, profile, onUpdate, allMonths, onUpdateAllMonths, onChangeMonthKey, onPullPrevMonth, onSaveMonthCloud, onLoadMonthCloud, onClearMonth, onExportExcel, cloudStatus, userPhone, t }) => {
 
             const year  = monthData.year;
             const month = monthData.month;
@@ -1537,7 +1537,7 @@
 
             /* ---- Локальное строковое состояние для ввода остатка топлива на начало ---- */
             const [fuelStartStr, setFuelStartStr] = useState(() => (
-                monthData.fuelStart !== undefined && monthData.fuelStart !== null && monthData.fuelStart !== ''
+                monthData.fuelStart !== undefined && monthData.fuelStart !== null && monthData.fuelStart !== '' && Number(monthData.fuelStart) > 0
                     ? formatFuel(monthData.fuelStart)
                     : ''
             ));
@@ -1549,12 +1549,16 @@
             useEffect(() => {
                 if (!isFuelStartFocused && document.activeElement?.id !== 'input-fuel-start') {
                     setFuelStartStr(
-                        monthData.fuelStart !== undefined && monthData.fuelStart !== null && monthData.fuelStart !== ''
+                        monthData.fuelStart !== undefined && monthData.fuelStart !== null && monthData.fuelStart !== '' && Number(monthData.fuelStart) > 0
                             ? formatFuel(monthData.fuelStart)
                             : ''
                     );
                 }
             }, [monthData.fuelStart, year, month, isFuelStartFocused]);
+
+            useEffect(() => {
+                setExpandedDayKey(null);
+            }, [year, month]);
 
             /* ---- Загрузка текущего месяца из Google Таблицы с подтверждением ---- */
             const handleLoadMonthClick = () => {
@@ -1566,6 +1570,40 @@
                     if (!confirmed) return;
                 }
                 onLoadMonthCloud();
+            };
+
+            /* ---- Очистить все рабочие дни за месяц (сохраняя одометр, топливо и заправки) ---- */
+            const handleClearWorkdays = () => {
+                const confirmed = confirm(
+                    'Очистить все рабочие дни и маршруты за этот месяц? Начальный одометр, остаток топлива и заправки сохранятся.'
+                );
+                if (!confirmed) return;
+
+                const refuelDates = new Set((monthData.refuels || []).filter(r => (Number(r.liters) || 0) > 0).map(r => r.date));
+                const wd = ensureWorkdays();
+                Object.keys(wd).forEach(dk => {
+                    const hasRefuel = refuelDates.has(dk);
+                    wd[dk] = {
+                        ...wd[dk],
+                        isWorkday: hasRefuel,
+                        tripKm: 0,
+                        trips: []
+                    };
+                });
+                updateWorkdays(wd);
+            };
+
+            /* ---- Очистить конкретный день (обнулить tripKm и trips) ---- */
+            const clearSingleDay = (dateKey) => {
+                const wd = ensureWorkdays();
+                const hasRefuel = (monthData.refuels || []).some(r => r.date === dateKey && (Number(r.liters) || 0) > 0);
+                wd[dateKey] = {
+                    ...wd[dateKey],
+                    isWorkday: hasRefuel,
+                    tripKm: 0,
+                    trips: []
+                };
+                updateWorkdays(wd);
             };
 
             /* ---- Вспомогалки обновления состояния ---- */
@@ -2126,6 +2164,16 @@
                 'bg-gray-100 text-gray-800 hover:bg-gray-200 border border-gray-300'
             );
 
+            const btnDangerOutline = t(
+                'border-red-500/50 text-red-400 hover:bg-red-500/10 hover:text-red-300',
+                'border-red-300 text-red-600 hover:bg-red-50',
+                'border-pink-300 text-red-600 hover:bg-pink-100',
+                'border-blue-300 text-red-600 hover:bg-blue-50',
+                'border-emerald-300 text-red-600 hover:bg-emerald-50',
+                'border-[#BCAAA4] text-red-700 hover:bg-[#EFEBE9]',
+                'border-red-400 text-red-500 hover:bg-red-500/10'
+            );
+
             return (
                 <div className="w-full space-y-4 animate-fade-in">
 
@@ -2133,7 +2181,19 @@
                     <div className={`rounded-lg border p-3 ${cardClass}`}>
                         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                             <p className={`text-xs font-bold ${accentClass}`}>МЕСЯЦ ОТЧЁТА</p>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={onClearMonth}
+                                    disabled={cloudStatus === 'syncing'}
+                                    className={`min-h-[36px] px-3 py-1 rounded text-xs font-bold flex items-center gap-1.5 border transition-all ${
+                                        cloudStatus === 'syncing' ? 'opacity-40 cursor-not-allowed' : btnDangerOutline
+                                    }`}
+                                    title="Полностью очистить все данные за текущий месяц (локально и в Google Таблице)"
+                                >
+                                    <IconTrash size={14} />
+                                    <span>Очистить месяц</span>
+                                </button>
                                 <button
                                     type="button"
                                     onClick={handleLoadMonthClick}
@@ -2373,9 +2433,20 @@
 
                     {/* ── Таблица рабочих дней ── */}
                     <div className={`rounded-lg border p-3 ${cardClass}`}>
-                        <p className={`text-xs font-bold mb-2 ${accentClass}`}>
-                            РАБОЧИЕ ДНИ — {MONTH_NAMES[month]} {year}
-                        </p>
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                            <p className={`text-xs font-bold ${accentClass}`}>
+                                РАБОЧИЕ ДНИ — {MONTH_NAMES[month]} {year}
+                            </p>
+                            <button
+                                type="button"
+                                onClick={handleClearWorkdays}
+                                className={`min-h-[34px] px-2.5 py-1 rounded text-xs font-bold flex items-center gap-1.5 border transition-all ${btnDangerOutline}`}
+                                title="Очистить все рабочие дни и маршруты за этот месяц (начальные остатки и заправки сохранятся)"
+                            >
+                                <IconTrash size={14} />
+                                <span>Очистить рабочие дни</span>
+                            </button>
+                        </div>
                         <p className="text-xs opacity-50 mb-3">
                             1-е число может не быть рабочим. Входящие данные переходят на первый рабочий день.
                         </p>
@@ -2494,18 +2565,29 @@
                                                 'bg-red-50/70 border-red-200 text-gray-900'
                                             )}`}>
                                                 {/* Шапка раскрытого дня */}
-                                                <div className="flex items-center justify-between pb-1.5 border-b border-current/10">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-bold">Цепочка маршрута: {d} {MONTH_NAMES_GEN[month]}</span>
-                                                        <span className="text-[10px] opacity-60">({tripCount} промежуточных точек)</span>
+                                                <div className="flex flex-wrap items-center justify-between pb-1.5 border-b border-current/10 gap-2">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <span className="font-bold truncate">Цепочка маршрута: {d} {MONTH_NAMES_GEN[month]}</span>
+                                                        <span className="text-[10px] opacity-60 flex-shrink-0">({tripCount} промежуточных точек)</span>
                                                     </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => addDayTrip(dateKey)}
-                                                        className={`px-2.5 py-1 rounded text-[11px] font-bold flex items-center gap-1 ${btnPrimary}`}
-                                                    >
-                                                        <IconPlus size={12} /> Добавить точку
-                                                    </button>
+                                                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => clearSingleDay(dateKey)}
+                                                            className={`px-2 py-1 rounded text-[11px] font-bold flex items-center gap-1 border transition-all ${btnDangerOutline}`}
+                                                            title="Сбросить километраж и точки маршрута этого дня"
+                                                        >
+                                                            <IconTrash size={12} />
+                                                            <span>Очистить день</span>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => addDayTrip(dateKey)}
+                                                            className={`px-2.5 py-1 rounded text-[11px] font-bold flex items-center gap-1 ${btnPrimary}`}
+                                                        >
+                                                            <IconPlus size={12} /> Добавить точку
+                                                        </button>
+                                                    </div>
                                                 </div>
 
                                                 {/* 1. Первая строка: ЗАКРЕПЛЁННЫЙ СТАРТ (из profile.startPoint) */}
@@ -3311,6 +3393,49 @@
                     const cleanStart = normalizeGeoKey(startPoint);
                     const cleanOffice = normalizeGeoKey(DEFAULT_OFFICE_ADDRESS.address);
 
+                    // Хелпер проверки адреса офиса (по подстроке Бутырская 62 или точному ключу)
+                    const isOfficeAddress = (addr) => {
+                        if (!addr) return false;
+                        const str = String(addr).toLowerCase();
+                        if (str.includes('бутырск') && str.includes('62')) return true;
+                        const k = normalizeGeoKey(addr);
+                        return k === cleanOffice;
+                    };
+
+                    // 1. Посчитаем, сколько рабочих дней месяца (с уже загруженными из CSV поездками) уже содержат адрес офиса
+                    let existingOfficeCount = 0;
+                    workdayKeys.forEach(k => {
+                        const dayObj = workdays[k];
+                        const trips = dayObj?.trips || [];
+                        if (trips.length > 0) {
+                            const hasOfficeInDay = trips.some(tr => isOfficeAddress(typeof tr === 'string' ? tr : (tr.address || tr.to || '')));
+                            if (hasOfficeInDay) {
+                                existingOfficeCount++;
+                            }
+                        }
+                    });
+
+                    // 2. Остаток лимита заездов в офис на весь месяц (максимум 2 раза за весь месяц)
+                    const remainingOfficeSlots = Math.max(0, 2 - existingOfficeCount);
+
+                    // 3. Заранее выбираем дни для заезда в офис из списка eligibleDayKeys
+                    const officeTargetDays = new Set();
+                    const totalEligible = eligibleDayKeys.length;
+                    if (remainingOfficeSlots >= 2 && totalEligible >= 4) {
+                        const half = Math.floor(totalEligible / 2);
+                        // 1 случайный день из первой половины и 1 случайный день из второй половины
+                        const idx1 = Math.floor(Math.random() * half);
+                        const idx2 = half + Math.floor(Math.random() * (totalEligible - half));
+                        officeTargetDays.add(eligibleDayKeys[idx1]);
+                        officeTargetDays.add(eligibleDayKeys[idx2]);
+                    } else if (remainingOfficeSlots >= 2 && totalEligible > 0) {
+                        const shuffled = [...eligibleDayKeys].sort(() => 0.5 - Math.random());
+                        shuffled.slice(0, Math.min(remainingOfficeSlots, totalEligible)).forEach(k => officeTargetDays.add(k));
+                    } else if (remainingOfficeSlots === 1 && totalEligible > 0) {
+                        const idx = Math.floor(Math.random() * totalEligible);
+                        officeTargetDays.add(eligibleDayKeys[idx]);
+                    }
+
                     // Черновик рабочих дней для пошагового контроля расхода топлива
                     const tempWorkdays = {};
                     for (let d = 1; d <= totalDays; d++) {
@@ -3374,30 +3499,29 @@
                     usedInMonth.add(cleanStart);
                     usedInMonth.add(cleanOffice);
 
-                    // 4. Формируем колоду доступных адресов без повторов
+                    // 4. Формируем колоду доступных адресов без повторов (офис гарантированно исключён)
                     const availableUser = userAddressesWithCoords
                         .filter(a => {
                             const k = normalizeGeoKey(a.address);
-                            return k && k !== cleanStart && k !== cleanOffice && !usedInMonth.has(k);
+                            return k && k !== cleanStart && !isOfficeAddress(a.address) && !usedInMonth.has(k);
                         })
                         .sort(() => 0.5 - Math.random());
 
                     const availablePool = MOSCOW_MO_ADDRESS_POOL
                         .filter(a => {
                             const k = normalizeGeoKey(a.address);
-                            return k && k !== cleanStart && k !== cleanOffice && !usedInMonth.has(k);
+                            return k && k !== cleanStart && !isOfficeAddress(a.address) && !usedInMonth.has(k);
                         })
                         .sort(() => 0.5 - Math.random());
 
                     let availableDeck = [...availableUser, ...availablePool];
                     if (availableDeck.length === 0) {
-                        // Если все адреса заняты, повторно открываем пул Москвы и МО
-                        availableDeck = [...MOSCOW_MO_ADDRESS_POOL.filter(a => normalizeGeoKey(a.address) !== cleanStart)];
+                        // Если все адреса заняты, повторно открываем пул Москвы и МО (без старта и офиса)
+                        availableDeck = [...MOSCOW_MO_ADDRESS_POOL.filter(a => normalizeGeoKey(a.address) !== cleanStart && !isOfficeAddress(a.address))];
                     }
 
                     const newPreview = {};
                     const newCacheEntries = {};
-                    let lastOfficeDayIndex = -99;
                     let carryDelta = 0;
                     let anyOsrm = false;
 
@@ -3450,15 +3574,8 @@
                             Math.max(20, remainingMonthBudgetKm)
                         );
 
-                        // Включение заезда в офис/склад (~30–35% дней, не подряд)
-                        let includeOffice = false;
-                        if (dayIdx - lastOfficeDayIndex > 1) {
-                            const prob = (dayIdx - lastOfficeDayIndex >= 3) ? 0.65 : 0.33;
-                            if (Math.random() < prob) {
-                                includeOffice = true;
-                                lastOfficeDayIndex = dayIdx;
-                            }
-                        }
+                        // Включение заезда в офис/склад строго по заранее распределённым дням (максимум 2 раза за весь месяц)
+                        const includeOffice = officeTargetDays.has(dateKey);
 
                         // Количество промежуточных точек (2–5) в зависимости от целевого километража
                         let pointsCount = 2;
@@ -3469,9 +3586,9 @@
 
                         const otherPointsNeeded = includeOffice ? Math.max(1, pointsCount - 1) : pointsCount;
 
-                        // Если в колоде мало адресов, пополняем её из пула Москвы и МО
+                        // Если в колоде мало адресов, пополняем её из пула Москвы и МО (без старта и офиса)
                         if (availableDeck.length < otherPointsNeeded) {
-                            const refill = [...MOSCOW_MO_ADDRESS_POOL.filter(a => normalizeGeoKey(a.address) !== cleanStart)]
+                            const refill = [...MOSCOW_MO_ADDRESS_POOL.filter(a => normalizeGeoKey(a.address) !== cleanStart && !isOfficeAddress(a.address))]
                                 .sort(() => 0.5 - Math.random());
                             availableDeck = [...availableDeck, ...refill];
                         }
@@ -3514,7 +3631,7 @@
                         // Фиксируем выбранные адреса клиентов в usedInMonth и удаляем их из свободной колоды
                         chosenCombo.forEach(pt => {
                             const k = normalizeGeoKey(pt.address);
-                            if (k !== cleanOffice && k !== cleanStart) {
+                            if (!isOfficeAddress(pt.address) && k !== cleanStart) {
                                 usedInMonth.add(k);
                             }
                         });
@@ -3543,7 +3660,7 @@
                             let maxDist = -1;
                             for (let ci = 0; ci < currentCombo.length; ci++) {
                                 const pt = currentCombo[ci];
-                                const isOff = normalizeGeoKey(pt.address) === cleanOffice;
+                                const isOff = isOfficeAddress(pt.address);
                                 if (isOff && currentCombo.length > 2) continue; // не удаляем офис, если есть клиенты
                                 const dFromStart = haversineDistance(startCoords.lat, startCoords.lon, pt.lat, pt.lon);
                                 if (dFromStart > maxDist) {
@@ -3582,7 +3699,7 @@
                         // 7. Формируем промежуточные точки маршрута (чистые метки: taskType только для офиса/склада)
                         const intermediateAddrs = currentCombo.map(p => p.address);
                         const dayTrips = intermediateAddrs.map((addr, idx) => {
-                            const isOffice = normalizeGeoKey(addr) === cleanOffice;
+                            const isOffice = isOfficeAddress(addr);
                             const taskType = isOffice ? 'Офис и склад' : '';
                             const hour = 9 + Math.floor(idx * 2);
                             const minute = (idx % 2 === 0) ? '00' : '30';
@@ -5242,6 +5359,58 @@
                 }
             };
 
+            /* ── Полная очистка текущего месяца ── */
+            const handleClearMonth = async () => {
+                const [y, m] = currentMonthKey.split('-').map(Number);
+                const monthName = MONTH_NAMES[m] || `${m}`;
+                const confirmed = confirm(
+                    'Очистить все данные за ' + monthName + ' ' + y + ' (одометр, топливо, заправки, рабочие дни и маршруты)? Данные будут сброшены локально и в Google Таблице.'
+                );
+                if (!confirmed) return;
+
+                const totDays = daysInMonth(y, m);
+                const emptyWorkdays = {};
+                for (let d = 1; d <= totDays; d++) {
+                    const dk = toDateStr(y, m, d);
+                    emptyWorkdays[dk] = {
+                        isWorkday: false,
+                        tripKm: 0,
+                        odometerStart: 0,
+                        odometerEnd: 0,
+                        fuelStart: 0,
+                        fuelEnd: 0,
+                        trips: []
+                    };
+                }
+
+                const emptyMonth = {
+                    year: y,
+                    month: m,
+                    seasonOverride: null,
+                    odometerStart: 0,
+                    fuelStart: 0,
+                    refuels: [],
+                    workdays: emptyWorkdays
+                };
+
+                userChangedMonthRef.current = true;
+                setMonths(prev => {
+                    const updated = { ...prev, [currentMonthKey]: emptyMonth };
+                    localStorage.setItem('expert_report_months', JSON.stringify(updated));
+                    return updated;
+                });
+
+                if (isAuthVerified) {
+                    try {
+                        await saveMonthCloud(emptyMonth, currentMonthKey);
+                    } catch (e) {
+                        console.error('Ошибка сохранения очищенного месяца в Google Таблицу:', e);
+                    }
+                }
+
+                alert('✓ Месяц очищен локально и в Google Таблице');
+            };
+
             /* ── Сохранение справочника адресов в Google Таблицу ── */
             const saveAddressesCloud = async (customAddresses) => {
                 const phone = normalizePhone(userPhone);
@@ -5524,13 +5693,19 @@
                                 } else {
                                     wsCalc.getCell(`C${row}`).value = currentOdo;
                                     wsCalc.getCell(`D${row}`).value = currentOdo + kmInt;
-                                    wsCalc.getCell(`G${row}`).value = refuelLiters > 0 ? refuelLiters : 0;
+                                    wsCalc.getCell(`G${row}`).value = refuelLiters > 0 ? refuelLiters : null;
                                     currentOdo += kmInt;
                                 }
                             } else {
                                 wsCalc.getCell(`C${row}`).value = null;
                                 wsCalc.getCell(`D${row}`).value = null;
                                 wsCalc.getCell(`G${row}`).value = null;
+                            }
+
+                            // Проверка столбца H («Заправлено наличными»): если значение 0 — оставляем ячейку пустой (null)
+                            const hCell = wsCalc.getCell(`H${row}`);
+                            if (hCell && (hCell.value === 0 || hCell.value === '0')) {
+                                hCell.value = null;
                             }
                         }
                     }
@@ -5858,6 +6033,7 @@
                                     onPullPrevMonth={(y, m) => applyPrevMonthBalances(y, m, true)}
                                     onSaveMonthCloud={() => saveMonthCloud(currentMonthData, currentMonthKey)}
                                     onLoadMonthCloud={() => loadMonthCloud(currentMonthKey)}
+                                    onClearMonth={handleClearMonth}
                                     onExportExcel={() => exportReportToExcel(profile, currentMonthData)}
                                     cloudStatus={cloudStatus}
                                     userPhone={userPhone}
