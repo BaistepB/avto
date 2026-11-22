@@ -3986,6 +3986,29 @@
                     let carryDelta = 0;
                     let anyOsrm = false;
 
+                    // Сортировка точек алгоритмом «ближайший сосед» от стартовой точки для исключения зигзагов
+                    const sortRouteNearestNeighbor = (startPt, pts) => {
+                        if (!pts || pts.length <= 1) return [...(pts || [])];
+                        const remaining = [...pts];
+                        const sorted = [];
+                        let current = startPt;
+                        while (remaining.length > 0) {
+                            let nearestIdx = 0;
+                            let minDist = Infinity;
+                            for (let i = 0; i < remaining.length; i++) {
+                                const d = haversineKm(current, remaining[i]);
+                                if (d < minDist) {
+                                    minDist = d;
+                                    nearestIdx = i;
+                                }
+                            }
+                            const nextPt = remaining.splice(nearestIdx, 1)[0];
+                            sorted.push(nextPt);
+                            current = nextPt;
+                        }
+                        return sorted;
+                    };
+
                     // Быстрая вспомогательная оценка протяжённости цепочки по координатам Haversine * 1.32
                     const estimateCoordsLoopKm = (pts) => {
                         const coords = [startCoords, ...pts, startCoords];
@@ -3994,6 +4017,37 @@
                             sum += haversineDistance(coords[i].lat, coords[i].lon, coords[i + 1].lat, coords[i + 1].lon) * 1.32;
                         }
                         return Math.round(sum * 10) / 10;
+                    };
+
+                    // Распределение слотов времени под рабочий график 09:00–21:00 (4 интервала: 09–12, 12–15, 15–18, 18–21)
+                    const getTimeSlotsForDay = (count, isMontage) => {
+                        if (isMontage || count <= 4) {
+                            const montageBase = ['09:00', '12:00', '15:00', '18:00', '19:30'];
+                            return montageBase.slice(0, count);
+                        }
+                        if (count === 5) {
+                            return Math.random() < 0.5
+                                ? ['09:00', '10:30', '12:00', '15:00', '18:00']
+                                : ['09:00', '12:00', '13:30', '16:00', '18:00'];
+                        }
+                        if (count === 6) {
+                            return Math.random() < 0.5
+                                ? ['09:00', '10:30', '12:00', '13:30', '15:00', '18:00']
+                                : ['09:00', '12:00', '13:30', '15:00', '16:30', '18:00'];
+                        }
+                        if (count === 7) {
+                            return ['09:00', '10:30', '12:00', '13:30', '15:00', '16:30', '18:00'];
+                        }
+                        const grid = ['09:00', '10:30', '12:00', '13:30', '15:00', '16:30', '18:00', '19:30'];
+                        if (count <= grid.length) return grid.slice(0, count);
+                        const res = [];
+                        for (let i = 0; i < count; i++) {
+                            const totalMinutes = 9 * 60 + Math.floor(i * (11 * 60) / Math.max(1, count - 1));
+                            const h = Math.floor(totalMinutes / 60);
+                            const m = totalMinutes % 60;
+                            res.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+                        }
+                        return res;
                     };
 
                     for (let dayIdx = 0; dayIdx < eligibleDayKeys.length; dayIdx++) {
@@ -4040,17 +4094,27 @@
                         // Включение заезда в офис/склад строго по заранее распределённым дням (максимум 2 раза за весь месяц)
                         const includeOffice = officeTargetDays.has(dateKey);
 
-                        // Количество промежуточных точек (2–5) в зависимости от целевого километража
-                        let pointsCount = 2;
-                        if (targetKmForDay >= 160) pointsCount = Math.random() < 0.5 ? 4 : 5;
-                        else if (targetKmForDay >= 110) pointsCount = Math.random() < 0.5 ? 3 : 4;
-                        else if (targetKmForDay >= 65) pointsCount = Math.random() < 0.5 ? 2 : 3;
-                        else pointsCount = 2;
+                        // 1. Определение типа дня (монтажный / обычный) и количества промежуточных точек
+                        let isMontageDay = false;
+                        let pointsCount = 6;
+                        if (targetKmForDay < 150 && Math.random() < 0.20) {
+                            isMontageDay = true;
+                            pointsCount = Math.random() < 0.6 ? 3 : 4;
+                        } else {
+                            isMontageDay = false;
+                            if (targetKmForDay >= 150) {
+                                pointsCount = Math.random() < 0.5 ? 6 : 7;
+                            } else if (targetKmForDay >= 85) {
+                                pointsCount = 6;
+                            } else {
+                                pointsCount = Math.random() < 0.5 ? 5 : 6;
+                            }
+                        }
 
                         const otherPointsNeeded = includeOffice ? Math.max(1, pointsCount - 1) : pointsCount;
 
-                        // Если в колоде мало адресов, пополняем её из пула кандидатов сектора
-                        if (availableDeck.length < otherPointsNeeded) {
+                        // 2. Пополнение свободной колоды адресов строго без дубликатов
+                        if (availableDeck.length < Math.max(16, otherPointsNeeded * 2)) {
                             let refill = uniqueCandidates
                                 .filter(a => isAddressInEmployeeSector(startCoords, a))
                                 .sort(() => 0.5 - Math.random());
@@ -4062,25 +4126,73 @@
                             if (refill.length < otherPointsNeeded) {
                                 refill = uniqueCandidates.sort(() => 0.5 - Math.random());
                             }
-                            availableDeck = [...availableDeck, ...refill];
+                            const existingKeys = new Set(availableDeck.map(a => normalizeGeoKey(a.address)));
+                            refill.forEach(cand => {
+                                const k = normalizeGeoKey(cand.address);
+                                if (!existingKeys.has(k) && !usedInMonth.has(k) && k !== cleanStart && !isOfficeAddress(cand.address)) {
+                                    existingKeys.add(k);
+                                    availableDeck.push(cand);
+                                }
+                            });
+                            // Если адреса в месяце исчерпаны — пополняем из сектора, строго избегая дубликатов в availableDeck
+                            if (availableDeck.length < otherPointsNeeded) {
+                                refill.forEach(cand => {
+                                    const k = normalizeGeoKey(cand.address);
+                                    if (!existingKeys.has(k) && k !== cleanStart && !isOfficeAddress(cand.address)) {
+                                        existingKeys.add(k);
+                                        availableDeck.push(cand);
+                                    }
+                                });
+                            }
                         }
 
-                        // 5. Перебор до 25 комбинаций в памяти: приоритетно выбираем петлю <= dayCapKm с учётом кучности (кластеризации)
+                        // 3. Перебор ~30 комбинаций вокруг случайной якорной точки: кластер ближайших адресов + сортировка Nearest Neighbor
                         let bestCombo = null;
                         let bestDiff = Infinity;
                         let bestWithinCap = null;
                         let bestDiffWithinCap = Infinity;
-                        const attempts = Math.min(25, Math.max(8, availableDeck.length));
+                        const attempts = Math.min(30, Math.max(12, availableDeck.length));
 
                         for (let a = 0; a < attempts; a++) {
-                            const shuffledSlice = [...availableDeck].sort(() => 0.5 - Math.random()).slice(0, otherPointsNeeded);
-                            let candidateList = [];
-                            if (includeOffice) {
-                                if (Math.random() < 0.5) candidateList = [DEFAULT_OFFICE_ADDRESS, ...shuffledSlice];
-                                else candidateList = [...shuffledSlice, DEFAULT_OFFICE_ADDRESS];
-                            } else {
-                                candidateList = shuffledSlice;
+                            // Выбираем 1 якорную точку
+                            const anchor = availableDeck[Math.floor(Math.random() * availableDeck.length)];
+                            const anchorKey = normalizeGeoKey(anchor.address);
+
+                            // Отбираем остальные адреса колоды, отсортированные по расстоянию до якоря
+                            const otherDeck = availableDeck.filter(x => normalizeGeoKey(x.address) !== anchorKey);
+                            otherDeck.sort((p1, p2) => haversineKm(anchor, p1) - haversineKm(anchor, p2));
+
+                            // Пул из ближайших до 14 точек к якорю
+                            const poolSize = Math.min(14, otherDeck.length);
+                            const clusterPool = otherDeck.slice(0, poolSize);
+                            const shuffledCluster = [...clusterPool].sort(() => 0.5 - Math.random());
+                            const pickedOthers = shuffledCluster.slice(0, Math.max(0, otherPointsNeeded - 1));
+
+                            // Строгая дедупликация адресов внутри комбинации
+                            const dayCandMap = new Map();
+                            dayCandMap.set(anchorKey, anchor);
+                            pickedOthers.forEach(p => {
+                                const k = normalizeGeoKey(p.address);
+                                if (!dayCandMap.has(k)) dayCandMap.set(k, p);
+                            });
+
+                            if (dayCandMap.size < otherPointsNeeded) {
+                                for (const p of otherDeck) {
+                                    const k = normalizeGeoKey(p.address);
+                                    if (!dayCandMap.has(k)) {
+                                        dayCandMap.set(k, p);
+                                        if (dayCandMap.size >= otherPointsNeeded) break;
+                                    }
+                                }
                             }
+
+                            let candidateList = Array.from(dayCandMap.values());
+                            if (includeOffice) {
+                                candidateList.push(DEFAULT_OFFICE_ADDRESS);
+                            }
+
+                            // Выстраиваем цепочку алгоритмом «ближайший сосед» от точки старта
+                            candidateList = sortRouteNearestNeighbor(startCoords, candidateList);
 
                             const estKm = estimateCoordsLoopKm(candidateList);
 
@@ -4092,8 +4204,8 @@
                                     if (d > maxSpreadKm) maxSpreadKm = d;
                                 }
                             }
-                            // Штраф к оценке, если точки раскиданы более чем на 55 км друг от друга
-                            const spreadPenalty = maxSpreadKm > 55 ? (maxSpreadKm - 55) * 1.5 : 0;
+                            // Штраф к оценке, если точки раскиданы более чем на 50 км друг от друга
+                            const spreadPenalty = maxSpreadKm > 50 ? (maxSpreadKm - 50) * 1.5 : 0;
                             const score = Math.abs(estKm - targetKmForDay) + spreadPenalty;
 
                             if (score < bestDiff) {
@@ -4110,7 +4222,11 @@
                             }
                         }
 
-                        let chosenCombo = bestWithinCap || bestCombo || availableDeck.slice(0, otherPointsNeeded);
+                        let chosenCombo = bestWithinCap || bestCombo || (
+                            includeOffice
+                                ? sortRouteNearestNeighbor(startCoords, [DEFAULT_OFFICE_ADDRESS, ...availableDeck.slice(0, otherPointsNeeded)])
+                                : sortRouteNearestNeighbor(startCoords, availableDeck.slice(0, otherPointsNeeded))
+                        );
 
                         // Фиксируем выбранные адреса клиентов в usedInMonth и удаляем их из свободной колоды
                         chosenCombo.forEach(pt => {
@@ -4121,8 +4237,8 @@
                         });
                         availableDeck = availableDeck.filter(a => !usedInMonth.has(normalizeGeoKey(a.address)));
 
-                        // 6. Реальный расчёт выбранной дорожной петли через OSRM
-                        let currentCombo = [...chosenCombo];
+                        // 4. Реальный расчёт выбранной дорожной петли через OSRM
+                        let currentCombo = sortRouteNearestNeighbor(startCoords, [...chosenCombo]);
                         let loopCoords = [startCoords, ...currentCombo.map(p => ({ lat: p.lat, lon: p.lon })), startCoords];
                         let osrmResult = await fetchOsrmLoop(loopCoords);
                         if (!osrmResult.isOffline) {
@@ -4132,12 +4248,12 @@
                         let actualLoopKm = osrmResult.totalKm;
                         let legsKm = osrmResult.legs || [];
 
-                        // Если реальный дорожный пробег превышает safeCapKm или бюджет месяца более чем на 5% — укорачиваем петлю
+                        // Если реальный дорожный пробег превышает safeCapKm или бюджет месяца более чем на 5% — аккуратно укорачиваем петлю
                         const maxBudgetAllowed = Math.round(remainingMonthBudgetKm * 1.05);
                         const effectiveMaxKm = Math.min(safeCapKm, maxBudgetAllowed);
 
                         let trimTries = 0;
-                        while (Math.round(actualLoopKm) > effectiveMaxKm && currentCombo.length > 1 && trimTries < 4) {
+                        while (Math.round(actualLoopKm) > effectiveMaxKm && currentCombo.length > 2 && trimTries < 5) {
                             trimTries++;
                             // Ищем самую дальнюю точку от старта
                             let farthestIdx = -1;
@@ -4155,6 +4271,7 @@
 
                             if (farthestIdx >= 0) {
                                 currentCombo.splice(farthestIdx, 1);
+                                currentCombo = sortRouteNearestNeighbor(startCoords, currentCombo);
                                 loopCoords = [startCoords, ...currentCombo.map(p => ({ lat: p.lat, lon: p.lon })), startCoords];
                                 osrmResult = await fetchOsrmLoop(loopCoords);
                                 actualLoopKm = osrmResult.totalKm;
@@ -4180,18 +4297,37 @@
                         carryDelta += dayDiff;
                         remainingMonthBudgetKm = Math.max(0, remainingMonthBudgetKm - finalDayKm);
 
-                        // 7. Формируем промежуточные точки маршрута (чистые метки: taskType только для офиса/склада)
+                        // 5. Формируем промежуточные точки маршрута под рабочий график 09:00–21:00
                         const intermediateAddrs = currentCombo.map(p => p.address);
+                        const timeSlots = getTimeSlotsForDay(intermediateAddrs.length, isMontageDay);
+
+                        let montageIndices = new Set();
+                        if (!isMontageDay) {
+                            const nonOfficeIndices = [];
+                            intermediateAddrs.forEach((addr, idx) => {
+                                if (!isOfficeAddress(addr)) nonOfficeIndices.push(idx);
+                            });
+                            const montageCount = Math.min(nonOfficeIndices.length, Math.random() < 0.6 ? 1 : 2);
+                            const shuffledNonOffice = [...nonOfficeIndices].sort(() => 0.5 - Math.random());
+                            shuffledNonOffice.slice(0, montageCount).forEach(idx => montageIndices.add(idx));
+                        }
+
                         const dayTrips = intermediateAddrs.map((addr, idx) => {
                             const isOffice = isOfficeAddress(addr);
-                            const taskType = isOffice ? 'Офис и склад' : '';
-                            const hour = 9 + Math.floor(idx * 2);
-                            const minute = (idx % 2 === 0) ? '00' : '30';
+                            let taskType = '';
+                            if (isOffice) {
+                                taskType = 'Офис и склад';
+                            } else if (isMontageDay) {
+                                taskType = 'М';
+                            } else {
+                                taskType = montageIndices.has(idx) ? 'М' : 'С';
+                            }
+
                             return {
                                 order: idx + 1,
                                 address: addr,
                                 taskType: taskType,
-                                time: `${String(hour).padStart(2, '0')}:${minute}`,
+                                time: timeSlots[idx] || '09:00',
                                 distanceKm: legsKm[idx] || 0
                             };
                         });
