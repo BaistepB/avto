@@ -5476,18 +5476,25 @@
 
             /* ── Текущий месяц по умолчанию — сегодня ── */
             const defaultKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2,'0')}`;
-            const [currentMonthKey, setCurrentMonthKey] = useState(defaultKey);
 
             /* ── Открытые вкладки месяцев ── */
             const [openMonthKeys, setOpenMonthKeys] = useState(() => {
-                const set = new Set();
-                set.add(defaultKey);
                 try {
-                    const savedTabs = JSON.parse(localStorage.getItem('expert_report_open_tabs') || '[]');
-                    if (Array.isArray(savedTabs)) {
-                        savedTabs.forEach(k => { if (/^\d{4}-\d{2}$/.test(k)) set.add(k); });
+                    const rawSavedTabs = localStorage.getItem('expert_report_open_tabs');
+                    if (rawSavedTabs !== null) {
+                        const parsed = JSON.parse(rawSavedTabs);
+                        if (Array.isArray(parsed)) {
+                            const validTabs = parsed.filter(k => /^\d{4}-\d{2}$/.test(k));
+                            if (validTabs.length > 0) {
+                                return Array.from(new Set(validTabs)).sort();
+                            }
+                        }
                     }
                 } catch {}
+
+                // Автоматически собираем defaultKey + непустые месяцы, ТОЛЬКО если expert_report_open_tabs ещё нет в localStorage или он пустой
+                const set = new Set();
+                set.add(defaultKey);
                 try {
                     const savedMonths = JSON.parse(localStorage.getItem('expert_report_months') || '{}');
                     Object.entries(savedMonths).forEach(([k, m]) => {
@@ -5501,6 +5508,12 @@
                     });
                 } catch {}
                 return Array.from(set).sort();
+            });
+
+            /* ── Текущий выбранный месяц (всегда совпадает с одной из открытых вкладок) ── */
+            const [currentMonthKey, setCurrentMonthKey] = useState(() => {
+                if (openMonthKeys.includes(defaultKey)) return defaultKey;
+                return openMonthKeys[openMonthKeys.length - 1] || defaultKey;
             });
 
             useEffect(() => {
@@ -5747,17 +5760,32 @@
                     }
                     if (loadedMonths && typeof loadedMonths === 'object') {
                         setMonths(prev => ({ ...prev, ...loadedMonths }));
-                        setOpenMonthKeys(prevKeys => {
-                            const set = new Set(prevKeys);
-                            Object.entries(loadedMonths).forEach(([k, m]) => {
-                                if (!/^\d{4}-\d{2}$/.test(k)) return;
-                                const hasOdo = Number(m?.odometerStart) > 0;
-                                const hasRefuels = Array.isArray(m?.refuels) && m.refuels.length > 0;
-                                const hasWorkdays = m?.workdays && Object.values(m.workdays).some(d => d && (d.isWorkday || (d.trips && d.trips.length > 0) || Number(d.tripKm) > 0));
-                                if (hasOdo || hasRefuels || hasWorkdays) set.add(k);
+
+                        // Автоматически добавляем непустые месяцы ТОЛЬКО если expert_report_open_tabs отсутствует в localStorage (первый вход)
+                        const hasSavedTabs = (() => {
+                            try {
+                                const raw = localStorage.getItem('expert_report_open_tabs');
+                                if (raw !== null) {
+                                    const parsed = JSON.parse(raw);
+                                    return Array.isArray(parsed) && parsed.filter(k => /^\d{4}-\d{2}$/.test(k)).length > 0;
+                                }
+                            } catch {}
+                            return false;
+                        })();
+
+                        if (!hasSavedTabs) {
+                            setOpenMonthKeys(prevKeys => {
+                                const set = new Set(prevKeys);
+                                Object.entries(loadedMonths).forEach(([k, m]) => {
+                                    if (!/^\d{4}-\d{2}$/.test(k)) return;
+                                    const hasOdo = Number(m?.odometerStart) > 0;
+                                    const hasRefuels = Array.isArray(m?.refuels) && m.refuels.length > 0;
+                                    const hasWorkdays = m?.workdays && Object.values(m.workdays).some(d => d && (d.isWorkday || (d.trips && d.trips.length > 0) || Number(d.tripKm) > 0));
+                                    if (hasOdo || hasRefuels || hasWorkdays) set.add(k);
+                                });
+                                return Array.from(set).sort();
                             });
-                            return Array.from(set).sort();
-                        });
+                        }
                     }
                     if (loadedAddresses && Array.isArray(loadedAddresses)) {
                         setAddresses(ensureDefaultOfficeAddress(loadedAddresses, (loadedProfile || profile)?.startPoint));
