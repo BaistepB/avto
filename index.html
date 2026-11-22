@@ -75,6 +75,11 @@
             user-select: none;
             animation: snowfall linear infinite;
         }
+
+        .bg-pastel-theme {
+            background: linear-gradient(90deg, #FBBBB4 0%, #FBDEB4 25%, #CAFBB4 50%, #B4FBFA 75%, #C6C9FC 100%);
+            background-attachment: fixed;
+        }
     </style>
 </head>
 <body>
@@ -576,12 +581,13 @@
         };
 
         /* ═══════════════════════════════════════════════════
-           2. СИСТЕМА 9 ТЕМ
+           2. СИСТЕМА 10 ТЕМ
         ═══════════════════════════════════════════════════ */
         const THEME_LIST = [
             { id: 'expert',      label: 'ЭКСПЕРТ' },
             { id: 'expert-dark', label: 'ЭКСПЕРТ НОЧЬ' },
             { id: 'newyear',    label: '🎄 НОВОГОДНЯЯ' },
+            { id: 'pastel',     label: 'ПАСТЕЛЬ' },
             { id: 'dark',       label: 'ТЁМНАЯ' },
             { id: 'light',      label: 'СВЕТЛАЯ' },
             { id: 'marine',     label: 'МОРСКАЯ' },
@@ -688,6 +694,21 @@
                     .replace(/text-\[#8D6E63\]/g, 'text-[#D7B399]')
                     .replace(/border-\[#D7CCC8\]/g, 'border-[#3E2F2A]')
                     .replace(/border-\[#A1887F\]/g, 'border-[#6D4C41]');
+            }
+            if (theme === 'pastel') {
+                return (light || dark)
+                    .replace(/bg-amber-50\/80/g, 'bg-white/60')
+                    .replace(/bg-gray-50/g, 'bg-white/55 backdrop-blur-md')
+                    .replace(/bg-gray-100/g, 'bg-white/55 backdrop-blur-md')
+                    .replace(/bg-white(?!\/)/g, 'bg-white/75')
+                    .replace(/hover:bg-amber-(500|600|700|800|900|950)/g, 'hover:bg-slate-900')
+                    .replace(/bg-amber-(400|500|600|700|800|900|950)/g, 'bg-slate-800/85')
+                    .replace(/text-amber-(400|500|600|700|800|900|950)/g, 'text-slate-700')
+                    .replace(/border-amber-(200|300|400|500|600|700)/g, 'border-slate-400/50')
+                    .replace(/border-gray-200/g, 'border-white/70 shadow-sm')
+                    .replace(/focus:ring-amber-\d+/g, 'focus:ring-slate-600')
+                    .replace(/focus:border-amber-\d+/g, 'focus:border-slate-600')
+                    .replace(/bg-green-600 hover:bg-green-700( active:bg-green-800)? text-white/g, 'bg-teal-700/90 hover:bg-teal-800 text-white shadow-md backdrop-blur-sm');
             }
             if (theme === 'mint')  return mint  || dark;
             if (theme === 'pink')  return pink  || dark;
@@ -1310,7 +1331,7 @@
         /* ═══════════════════════════════════════════════════
            7. КОМПОНЕНТ: КАРТОЧКА СОТРУДНИКА
         ═══════════════════════════════════════════════════ */
-        const ProfileCard = ({ profile, onChange, userPhone, onUserPhoneChange, onSaveCloud, cloudStatus, t }) => {
+        const ProfileCard = ({ profile, onChange, userPhone, onUserPhoneChange, onSaveCloud, cloudStatus, showToast, showAlert, t }) => {
 
             const handleImportXlsx = async (e) => {
                 const file = e.target.files[0];
@@ -1324,7 +1345,10 @@
                     let ws = wb.getWorksheet('Карточка сотрудника');
                     if (!ws) ws = wb.worksheets[0]; // запасной вариант
 
-                    if (!ws) { alert('Не удалось найти лист «Карточка сотрудника»'); return; }
+                    if (!ws) {
+                        if (showToast) showToast('Не удалось найти лист «Карточка сотрудника»', 'error');
+                        return;
+                    }
 
                     // Читаем ячейки колонки C согласно спецификации
                     const get = (row) => cellValue(ws.getCell(`C${row}`));
@@ -1343,7 +1367,7 @@
                         fuelType:      get(11),
                     }, true);
                 } catch (err) {
-                    alert('Ошибка чтения файла: ' + err.message);
+                    if (showToast) showToast('Ошибка чтения файла: ' + err.message, 'error');
                 }
                 e.target.value = '';
             };
@@ -1443,7 +1467,7 @@
                             </span>
                         </div>
 
-                        {/* Кнопки управления: Импорт xlsx и Сохранение в таблицу */}
+                        {/* Кнопки управления: Импорт xlsx и Сохранение на сервер */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <label className={`w-full min-h-[48px] p-3 rounded-lg border border-dashed flex items-center justify-center space-x-2 cursor-pointer text-xs font-bold transition-all ${t(
                                 'bg-[#1E2125] border-[#FFB300]/50 text-[#FFB300] hover:bg-[#282B30]',
@@ -1468,7 +1492,7 @@
                                 }`}
                             >
                                 <IconCloud size={16} />
-                                <span>{cloudStatus === 'syncing' ? 'Сохранение...' : 'Сохранить в таблицу'}</span>
+                                <span>{cloudStatus === 'syncing' ? 'Сохранение...' : 'Сохранить на сервер'}</span>
                             </button>
                         </div>
 
@@ -1745,7 +1769,7 @@
         /* ═══════════════════════════════════════════════════
            8. КОМПОНЕНТ: НАСТРОЙКА МЕСЯЦА + РАБОЧИЕ ДНИ
         ═══════════════════════════════════════════════════ */
-        const MonthSetup = ({ monthData, profile, onUpdate, allMonths, onUpdateAllMonths, onChangeMonthKey, onPullPrevMonth, onSaveMonthCloud, onLoadMonthCloud, onClearMonth, onExportExcel, cloudStatus, userPhone, theme, t }) => {
+        const MonthSetup = ({ monthData, profile, onUpdate, allMonths, onUpdateAllMonths, onChangeMonthKey, onPullPrevMonth, onSaveMonthCloud, onLoadMonthCloud, onClearMonth, onExportExcel, cloudStatus, userPhone, theme, showToast, showConfirm, showAlert, t }) => {
 
             const year  = monthData.year;
             const month = monthData.month;
@@ -1786,23 +1810,35 @@
                 setExpandedDayKey(null);
             }, [year, month]);
 
-            /* ---- Загрузка текущего месяца из Google Таблицы с подтверждением ---- */
-            const handleLoadMonthClick = () => {
+            /* ---- Загрузка текущего месяца с сервера с подтверждением ---- */
+            const handleLoadMonthClick = async () => {
                 if (!onLoadMonthCloud) return;
                 const hasWorkdays = Object.values(monthData.workdays || {}).some(d => d.isWorkday && ((Number(d.tripKm) || 0) > 0 || (d.trips || []).length > 0));
                 const hasRefuels = (monthData.refuels || []).length > 0;
                 if (hasWorkdays || hasRefuels) {
-                    const confirmed = confirm('Загрузить данные за этот месяц из Google Таблицы? Текущие несохранённые изменения будут заменены.');
+                    const confirmed = showConfirm
+                        ? await showConfirm({
+                            title: 'Загрузка с сервера',
+                            message: 'Загрузить данные за этот месяц с сервера? Текущие несохранённые изменения будут заменены.',
+                            confirmText: 'Загрузить и заменить',
+                            danger: true
+                        })
+                        : true;
                     if (!confirmed) return;
                 }
                 onLoadMonthCloud();
             };
 
             /* ---- Очистить все рабочие дни за месяц (сохраняя одометр, топливо и заправки) ---- */
-            const handleClearWorkdays = () => {
-                const confirmed = confirm(
-                    'Очистить все рабочие дни и маршруты за этот месяц? Начальный одометр, остаток топлива и заправки сохранятся.'
-                );
+            const handleClearWorkdays = async () => {
+                const confirmed = showConfirm
+                    ? await showConfirm({
+                        title: 'Очистка рабочих дней',
+                        message: 'Очистить все рабочие дни и маршруты за этот месяц? Начальный одометр, остаток топлива и заправки сохранятся.',
+                        confirmText: 'Очистить рабочие дни',
+                        danger: true
+                    })
+                    : true;
                 if (!confirmed) return;
 
                 const refuelDates = new Set((monthData.refuels || []).filter(r => (Number(r.liters) || 0) > 0).map(r => r.date));
@@ -1817,6 +1853,7 @@
                     };
                 });
                 updateWorkdays(wd);
+                if (showToast) showToast('✓ Все рабочие дни месяца очищены', 'success');
             };
 
             /* ---- Очистить конкретный день (обнулить tripKm и trips) ---- */
@@ -1990,7 +2027,7 @@
                     try {
                         let text = ev.target.result;
                         if (!text) {
-                            alert('Выбранный файл пуст.');
+                            if (showToast) showToast('Выбранный файл пуст.', 'error');
                             return;
                         }
 
@@ -2050,7 +2087,7 @@
                             // CSV формат (routes_all.csv и др.)
                             const rawLines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
                             if (rawLines.length === 0) {
-                                alert('В файле CSV отсутствуют строки данных.');
+                                if (showToast) showToast('В файле CSV отсутствуют строки данных.', 'error');
                                 return;
                             }
 
@@ -2107,7 +2144,7 @@
 
                         const datesFound = Object.keys(groupedByDate);
                         if (datesFound.length === 0) {
-                            alert('В файле не найдено строк с корректными датами поездок.');
+                            if (showToast) showToast('В файле не найдено строк с корректными датами поездок.', 'error');
                             return;
                         }
 
@@ -2213,10 +2250,14 @@
                             });
                             msg += 'Переключите месяц во вкладке, чтобы просмотреть их.';
                         }
-                        alert(msg.trim());
+                        if (showAlert) {
+                            showAlert(msg.trim(), 'Импорт маршрутов');
+                        } else if (showToast) {
+                            showToast(msg.trim(), 'info');
+                        }
 
                     } catch (err) {
-                        alert('Ошибка разбора файла маршрутов: ' + (err?.message || err));
+                        if (showToast) showToast('Ошибка разбора файла маршрутов: ' + (err?.message || err), 'error');
                     } finally {
                         e.target.value = '';
                     }
@@ -2228,7 +2269,10 @@
             const pullFromHistory = () => {
                 try {
                     const raw = localStorage.getItem('expert_app_route_history_v1');
-                    if (!raw) { alert('История маршрутов не найдена в браузере'); return; }
+                    if (!raw) {
+                        if (showToast) showToast('История маршрутов не найдена в браузере', 'info');
+                        return;
+                    }
                     const history = JSON.parse(raw);
                     const prefix  = `${year}-${String(month).padStart(2,'0')}-`;
                     const wd = ensureWorkdays();
@@ -2240,11 +2284,14 @@
                         wd[dateKey] = { ...wd[dateKey], isWorkday: true, trips: points };
                         count++;
                     });
-                    if (count === 0) { alert('Нет маршрутов за выбранный месяц в истории браузера'); return; }
+                    if (count === 0) {
+                        if (showToast) showToast('Нет маршрутов за выбранный месяц в истории браузера', 'info');
+                        return;
+                    }
                     updateWorkdays(wd);
-                    alert(`Подтянуто ${count} дн. из истории браузера`);
+                    if (showToast) showToast(`✓ Подтянуто ${count} дн. из истории браузера`, 'success');
                 } catch (err) {
-                    alert('Ошибка чтения истории: ' + err.message);
+                    if (showToast) showToast('Ошибка чтения истории: ' + err.message, 'error');
                 }
             };
 
@@ -2264,7 +2311,7 @@
                     }) || wb.getWorksheet('Расчет') || wb.getWorksheet('Расчёт');
 
                     if (!ws) {
-                        alert('Лист «Расчет» не найден в выбранном файле Excel. Проверьте правильность файла отчёта.');
+                        if (showToast) showToast('Лист «Расчет» не найден в выбранном файле Excel', 'error');
                         return;
                     }
 
@@ -2291,15 +2338,15 @@
                     }
 
                     if (odometerEnd === null && fuelEnd === null) {
-                        alert('Не удалось найти данные одометра (колонка D) и остатка топлива (колонка J) в строках 5–35 на листе «Расчет».');
+                        if (showToast) showToast('Не удалось найти данные одометра и топлива на листе «Расчет»', 'error');
                         return;
                     }
                     if (odometerEnd === null) {
-                        alert('Не удалось найти конечный одометр в колонке D (строки 5–35) на листе «Расчет».');
+                        if (showToast) showToast('Не удалось найти конечный одометр на листе «Расчет»', 'error');
                         return;
                     }
                     if (fuelEnd === null) {
-                        alert('Не удалось найти конечный остаток топлива в колонке J (строки 5–35) на листе «Расчет».');
+                        if (showToast) showToast('Не удалось найти конечный остаток топлива на листе «Расчет»', 'error');
                         return;
                     }
 
@@ -2318,9 +2365,9 @@
                     });
 
                     const odomFmt = odometerEnd.toLocaleString('ru-RU');
-                    alert(`Загружено из прошлого отчёта: одометр ${odomFmt} км, остаток ${formatFuel(fuelEnd)} л`);
+                    if (showToast) showToast(`✓ Загружено из прошлого отчёта: одометр ${odomFmt} км, остаток ${formatFuel(fuelEnd)} л`, 'success');
                 } catch (err) {
-                    alert('Ошибка чтения файла: ' + (err?.message || err));
+                    if (showToast) showToast('Ошибка чтения файла: ' + (err?.message || err), 'error');
                 } finally {
                     e.target.value = '';
                 }
@@ -2428,7 +2475,7 @@
                                     className={`min-h-[36px] px-3 py-1 rounded text-xs font-bold flex items-center gap-1.5 border transition-all ${
                                         cloudStatus === 'syncing' ? 'opacity-40 cursor-not-allowed' : btnDangerOutline
                                     }`}
-                                    title="Полностью очистить все данные за текущий месяц (локально и в Google Таблице)"
+                                    title="Полностью очистить все данные за текущий месяц (локально и на сервере)"
                                 >
                                     <IconTrash size={14} />
                                     <span>Очистить месяц</span>
@@ -2440,10 +2487,10 @@
                                     className={`min-h-[36px] px-3 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition-all ${
                                         !userPhone ? 'opacity-40 cursor-not-allowed bg-gray-600 text-white' : btnSecondary
                                     }`}
-                                    title="Загрузить сохранённые данные за этот месяц из Google Таблицы"
+                                    title="Загрузить сохранённые данные за этот месяц с сервера"
                                 >
                                     <IconRefresh size={14} className={cloudStatus === 'syncing' ? 'animate-spin' : ''} />
-                                    <span>Загрузить из таблицы</span>
+                                    <span>Загрузить с сервера</span>
                                 </button>
                                 <button
                                     type="button"
@@ -2454,7 +2501,7 @@
                                     }`}
                                 >
                                     <IconCloud size={14} />
-                                    <span>{cloudStatus === 'syncing' ? 'Сохранение...' : 'Сохранить месяц в таблицу'}</span>
+                                    <span>{cloudStatus === 'syncing' ? 'Сохранение...' : 'Сохранить месяц на сервер'}</span>
                                 </button>
                             </div>
                         </div>
@@ -2629,7 +2676,7 @@
                                 'border-[#C62828]/30 text-[#9A1B24] hover:bg-red-50'
                             )}`}>
                                 <IconUpload size={14} />
-                                <span>Загрузить routes_{year}-{String(month).padStart(2,'0')}.json / .csv</span>
+                                <span>Загрузить файл из приложения «Маршруты»</span>
                                 <input type="file" accept=".json,.csv" onChange={handleImportRoutes} className="hidden" />
                             </label>
                             <button
@@ -2645,7 +2692,7 @@
                                 )}`}
                             >
                                 <IconHistory size={14} />
-                                <span>Подтянуть из истории браузера (только чтение)</span>
+                                <span>Подтянуть автоматически из приложения «Маршруты»</span>
                             </button>
                         </div>
                     </div>
@@ -3036,7 +3083,7 @@
                         </div>
                     </div>
 
-                    {/* ── Кнопки синхронизации месяца с Google Таблицей ── */}
+                    {/* ── Кнопки синхронизации месяца с сервером ── */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <button
                             type="button"
@@ -3047,7 +3094,7 @@
                             }`}
                         >
                             <IconRefresh size={18} className={cloudStatus === 'syncing' ? 'animate-spin' : ''} />
-                            <span>Загрузить из таблицы</span>
+                            <span>Загрузить с сервера</span>
                         </button>
                         <button
                             type="button"
@@ -3058,7 +3105,7 @@
                             }`}
                         >
                             <IconCloud size={18} />
-                            <span>{cloudStatus === 'syncing' ? 'Сохранение месяца...' : 'Сохранить месяц в Google Таблицу'}</span>
+                            <span>{cloudStatus === 'syncing' ? 'Сохранение месяца...' : 'Сохранить месяц на сервер'}</span>
                         </button>
                     </div>
 
@@ -3094,6 +3141,9 @@
             cloudStatus,
             onExportExcel,
             userPhone,
+            showToast,
+            showConfirm,
+            showAlert,
             t
         }) => {
             const year  = monthData.year;
@@ -3274,7 +3324,7 @@
             /* ── Автовыбор оптимального количества дней с учётом топлива ── */
             const handleAutoSelectDays = () => {
                 if (targetTotal <= 0) {
-                    alert('Недостающий пробег равен 0 км.');
+                    if (showToast) showToast('Недостающий пробег равен 0 км.', 'info');
                     return;
                 }
                 const lo = Math.max(1, Number(minKm) || 70);
@@ -3336,11 +3386,11 @@
             /* ── Алгоритм распределения пробега с хронологической защитой топлива ── */
             const generateDistribution = () => {
                 if (targetTotal <= 0) {
-                    alert('Недостающий пробег равен 0 км.');
+                    if (showToast) showToast('Недостающий пробег равен 0 км.', 'info');
                     return;
                 }
                 if (selectedKeys.length === 0) {
-                    alert('Выберите хотя бы один день для распределения пробега.');
+                    if (showToast) showToast('Выберите хотя бы один день для распределения пробега.', 'info');
                     return;
                 }
 
@@ -3488,13 +3538,13 @@
                 const cleanStart = (profile.startPoint || '').toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
                 const cleanInput = trimmedAddr.toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
                 if (cleanStart && cleanInput === cleanStart) {
-                    alert('Этот адрес совпадает с вашей точкой старта. В личный справочник добавляются только точки поездок.');
+                    if (showToast) showToast('Этот адрес совпадает с точкой старта. В справочник добавляются только точки поездок.', 'info');
                     return;
                 }
 
                 const exists = addresses.some(a => (a.address || '').trim().toLowerCase() === trimmedAddr.toLowerCase());
                 if (exists) {
-                    alert('Такой адрес уже есть в справочнике.');
+                    if (showToast) showToast('Такой адрес уже есть в справочнике.', 'info');
                     return;
                 }
 
@@ -3527,7 +3577,7 @@
                 });
 
                 if (addedList.length === 0) {
-                    alert('Новых адресов не найдено (все адреса пустые, уже есть в справочнике или совпадают с точкой старта).');
+                    if (showToast) showToast('Новых адресов не найдено.', 'info');
                     return;
                 }
 
@@ -3535,7 +3585,7 @@
                 onUpdateAddresses(updated, true);
                 setBulkText('');
                 setIsBulkAdd(false);
-                alert(`Добавлено новых адресов: ${addedList.length}`);
+                if (showToast) showToast(`✓ Добавлено новых адресов: ${addedList.length}`, 'success');
             };
 
             /* ── Пополнение из всех загруженных Маршрутов ── */
@@ -3567,25 +3617,34 @@
                 });
 
                 if (collected.length === 0) {
-                    alert('В загруженных маршрутах не найдено новых адресов для добавления.');
+                    if (showToast) showToast('В загруженных маршрутах не найдено новых адресов.', 'info');
                     return;
                 }
 
                 const updated = ensureDefaultOfficeAddress([...addresses, ...collected], profile?.startPoint);
                 onUpdateAddresses(updated, true);
-                alert(`Успешно добавлено ${collected.length} новых адресов из маршрутов!`);
+                if (showToast) showToast(`✓ Успешно добавлено ${collected.length} новых адресов из маршрутов!`, 'success');
             };
 
             /* ── Удаление адреса из справочника ── */
-            const handleDeleteAddress = (idx) => {
+            const handleDeleteAddress = async (idx) => {
                 const item = addresses[idx];
                 const cleanItem = (item?.address || '').toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
                 const cleanOffice = DEFAULT_OFFICE_ADDRESS.address.toLowerCase().replace(/[\s\u00A0.,/\\-]/g, '');
                 if (cleanItem === cleanOffice) {
-                    if (!confirm('Это стандартный адрес офиса и склада. Вы уверены, что хотите удалить его из списка?')) return;
+                    const confirmed = showConfirm
+                        ? await showConfirm({
+                            title: 'Удаление адреса офиса',
+                            message: 'Это стандартный адрес офиса и склада. Вы уверены, что хотите удалить его из списка?',
+                            confirmText: 'Удалить адрес',
+                            danger: true
+                        })
+                        : true;
+                    if (!confirmed) return;
                 }
                 const updated = addresses.filter((_, i) => i !== idx);
                 onUpdateAddresses(updated, true);
+                if (showToast) showToast('Адрес удалён из справочника', 'info');
             };
 
             /* ── Расчёт реального пробега загруженных из CSV маршрутов ── */
@@ -3596,13 +3655,13 @@
                 });
 
                 if (targetDayKeys.length === 0) {
-                    alert('Все дни с маршрутами уже имеют рассчитанный пробег.');
+                    if (showToast) showToast('Все дни с маршрутами уже имеют рассчитанный пробег.', 'info');
                     return;
                 }
 
                 const startPoint = (profile?.startPoint || '').trim();
                 if (!startPoint) {
-                    alert('Пожалуйста, укажите домашний адрес (Точку старта) во вкладке «Профиль» (Карточка сотрудника)!');
+                    if (showToast) showToast('Укажите домашний адрес (Точку старта) во вкладке «Профиль»!', 'error');
                     return;
                 }
 
@@ -3621,7 +3680,7 @@
                     }
 
                     if (!startCoords) {
-                        alert('Не удалось определить координаты точки старта. Проверьте адрес в профиле.');
+                        if (showToast) showToast('Не удалось определить координаты точки старта. Проверьте адрес в профиле.', 'error');
                         return;
                     }
 
@@ -3703,7 +3762,7 @@
                         activeNorm
                     );
 
-                    // Обновляем месяц (с автосохранением в Google Таблицу)
+                    // Обновляем месяц (с автосохранением на сервер)
                     if (onUpdateMonth) {
                         onUpdateMonth({
                             ...monthData,
@@ -3712,10 +3771,10 @@
                     }
 
                     setDistributionMap(null);
-                    alert(`Рассчитан пробег для ${updatedDaysCount} дн. с реальными маршрутами: +${totalAddedKm} км`);
+                    if (showToast) showToast(`✓ Рассчитан пробег для ${updatedDaysCount} дн.: +${totalAddedKm} км`, 'success');
                 } catch (err) {
                     console.error('Ошибка расчёта пробега маршрутов:', err);
-                    alert('Ошибка расчёта пробега маршрутов: ' + (err.message || err));
+                    if (showToast) showToast('Ошибка расчёта пробега маршрутов: ' + (err.message || err), 'error');
                 } finally {
                     setIsCalculatingRouteKm(false);
                 }
@@ -3725,7 +3784,7 @@
             const handleGenerateRoutes = async () => {
                 const startPoint = (profile?.startPoint || '').trim();
                 if (!startPoint) {
-                    alert('Пожалуйста, укажите домашний адрес (Точку старта) во вкладке «Профиль» (Карточка сотрудника)!');
+                    if (showToast) showToast('Укажите домашний адрес (Точку старта) во вкладке «Профиль»!', 'error');
                     return;
                 }
 
@@ -3740,9 +3799,9 @@
                 if (eligibleDayKeys.length === 0) {
                     const hasAnyTrips = workdayKeys.some(k => (workdays[k]?.trips || []).length > 0);
                     if (hasAnyTrips) {
-                        alert('Во всех рабочих днях с пробегом уже заполнены маршруты (из CSV или ранее)!');
+                        if (showToast) showToast('Во всех рабочих днях с пробегом уже заполнены маршруты', 'info');
                     } else {
-                        alert('В текущем месяце нет рабочих дней с пробегом. Сначала распределите километраж по дням (Шаг 1)!');
+                        if (showToast) showToast('Сначала распределите километраж по дням (Шаг 1)!', 'info');
                     }
                     return;
                 }
@@ -3819,7 +3878,9 @@
                     const deficitDay = Object.keys(preCheck).sort().find(k => preCheck[k].isWorkday && Number(preCheck[k].fuelEnd) < -0.0001);
                     if (deficitDay) {
                         const [defY, defM, defD] = deficitDay.split('-');
-                        alert(`Внимание: обнаружен дефицит топлива в дне ${defD} ${MONTH_NAMES[Number(defM)]} (остаток: ${formatFuel(preCheck[deficitDay].fuelEnd)} л). Проверьте заправки перед подбором маршрутов!`);
+                        const deficitMsg = `Внимание: обнаружен дефицит топлива в дне ${defD} ${MONTH_NAMES[Number(defM)]} (остаток: ${formatFuel(preCheck[deficitDay].fuelEnd)} л). Проверьте заправки перед подбором маршрутов!`;
+                        if (showAlert) await showAlert(deficitMsg, 'Дефицит топлива');
+                        else if (showToast) showToast(deficitMsg, 'error');
                         setIsGeneratingRoutes(false);
                         setGenerationProgress('');
                         return;
@@ -3954,7 +4015,9 @@
 
                         if (safeCapKm < 15) {
                             const [dY, dM, dD] = dateKey.split('-');
-                            alert(`Невозможно подобрать маршрут на ${dD} ${MONTH_NAMES[Number(dM)]}: доступный лимит топлива всего ${safeCapKm} км. Проверьте заправки или распределение пробега!`);
+                            const capMsg = `Невозможно подобрать маршрут на ${dD} ${MONTH_NAMES[Number(dM)]}: доступный лимит топлива всего ${safeCapKm} км. Проверьте заправки или распределение пробега!`;
+                            if (showAlert) await showAlert(capMsg, 'Лимит топлива');
+                            else if (showToast) showToast(capMsg, 'error');
                             setIsGeneratingRoutes(false);
                             setGenerationProgress('');
                             return;
@@ -4166,7 +4229,7 @@
                     setRoutePreviewMap(newPreview);
                 } catch (err) {
                     console.error('Ошибка подбора маршрутов:', err);
-                    alert('Ошибка подбора маршрутов: ' + err.message);
+                    if (showToast) showToast('Ошибка подбора маршрутов: ' + err.message, 'error');
                 } finally {
                     setIsGeneratingRoutes(false);
                     setGenerationProgress('');
@@ -4415,9 +4478,9 @@
                                         type="button"
                                         onClick={onSaveAddressesCloud}
                                         className={`px-3 py-1.5 rounded text-xs font-semibold ${btnSecondary}`}
-                                        title="Принудительно сохранить справочник в Google Таблицу"
+                                        title="Принудительно сохранить справочник на сервер"
                                     >
-                                        ☁ Сохранить справочник в таблицу
+                                        ☁ Сохранить справочник на сервер
                                     </button>
                                 </div>
 
@@ -5290,6 +5353,7 @@
                                             theme === 'expert'      ? 'bg-[#D32F2F] text-white' :
                                             theme === 'expert-dark' ? 'bg-[#75161F] text-white border border-[#FF5252]/40' :
                                             theme === 'newyear'     ? 'bg-gradient-to-r from-[#0F291E] to-[#991B1B] text-[#FBBF24] border border-[#FBBF24]/50' :
+                                            theme === 'pastel'      ? 'bg-gradient-to-r from-[#D96B78] via-[#4AA89B] to-[#6366C6] text-white border border-white/40' :
                                             btnPrimary
                                         }`}
                                     >
@@ -5473,6 +5537,67 @@
             const templateBufferRef = useRef(null);
 
             const [isExporting, setIsExporting] = useState(false);
+
+            /* ── Менеджер тостов и диалогов ── */
+            const [toast, setToast] = useState(null); // { message, type: 'success' | 'error' | 'info' }
+            const toastTimerRef = useRef(null);
+
+            const showToast = useCallback((message, type = 'info') => {
+                if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+                setToast({ message, type });
+                toastTimerRef.current = setTimeout(() => {
+                    setToast(null);
+                }, 4000);
+            }, []);
+
+            const [dialog, setDialog] = useState(null); // { mode: 'confirm' | 'alert', title, message, confirmText, cancelText, danger, resolve }
+
+            const showConfirm = useCallback(({ title = 'Подтверждение', message, confirmText = 'Подтвердить', cancelText = 'Отмена', danger = false }) => {
+                return new Promise((resolve) => {
+                    setDialog({
+                        mode: 'confirm',
+                        title,
+                        message,
+                        confirmText,
+                        cancelText,
+                        danger,
+                        resolve
+                    });
+                });
+            }, []);
+
+            const showAlert = useCallback((message, title = 'Уведомление') => {
+                return new Promise((resolve) => {
+                    setDialog({
+                        mode: 'alert',
+                        title,
+                        message,
+                        confirmText: 'Понятно',
+                        danger: false,
+                        resolve
+                    });
+                });
+            }, []);
+
+            const handleDialogClose = useCallback((result) => {
+                setDialog(prev => {
+                    if (prev && prev.resolve) {
+                        prev.resolve(result);
+                    }
+                    return null;
+                });
+            }, []);
+
+            useEffect(() => {
+                if (!dialog) return;
+                const onKeyDown = (e) => {
+                    if (e.key === 'Escape') {
+                        handleDialogClose(dialog.mode === 'confirm' ? false : undefined);
+                    }
+                };
+                window.addEventListener('keydown', onKeyDown);
+                return () => window.removeEventListener('keydown', onKeyDown);
+            }, [dialog, handleDialogClose]);
 
             /* ── Текущий месяц по умолчанию — сегодня ── */
             const defaultKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2,'0')}`;
@@ -5699,7 +5824,7 @@
                 if (settings.yandexApiKey)    window.YANDEX_MAPS_API_KEY = settings.yandexApiKey;
             }, [settings]);
 
-            /* ── Загрузка данных пользователя из Google Таблицы ── */
+            /* ── Загрузка данных пользователя с сервера ── */
             const loadUserData = async (phoneToLoad, pinToLoad) => {
                 const phone = normalizePhone(phoneToLoad || userPhone);
                 const pin = normalizePin(pinToLoad || userPin);
@@ -5814,10 +5939,10 @@
                     setCloudStatus('saved');
                     return true;
                 } catch (err) {
-                    console.error('Ошибка загрузки данных из Google Таблицы:', err);
+                    console.error('Ошибка загрузки данных с сервера:', err);
                     setCloudStatus('error');
                     setCloudErrorMsg(err.message || 'Ошибка загрузки данных');
-                    setAuthError('Ошибка подключения к Google Таблице: ' + (err.message || 'повторите попытку'));
+                    setAuthError('Ошибка подключения к серверу: ' + (err.message || 'повторите попытку'));
                     return false;
                 } finally {
                     setAuthLoading(false);
@@ -5856,7 +5981,7 @@
                 window.location.reload();
             };
 
-            /* ── Сохранение профиля в Google Таблицу ── */
+            /* ── Сохранение профиля на сервер ── */
             const saveProfileCloud = async (customProfile) => {
                 const phone = normalizePhone(userPhone);
                 const pin = normalizePin(userPin);
@@ -5886,7 +6011,7 @@
                 }
             };
 
-            /* ── Загрузка конкретного месяца из Google Таблицы ── */
+            /* ── Загрузка конкретного месяца с сервера ── */
             const loadMonthCloud = async (customKey) => {
                 const phone = normalizePhone(userPhone);
                 const pin = normalizePin(userPin);
@@ -5896,7 +6021,7 @@
                 const monthTitle = `${MONTH_NAMES[targetMonth] || targetMonth} ${targetYear}`;
 
                 if (!isAuthVerified || !phone || phone.length !== 11 || !pin || pin.length !== 4 || !scriptUrl) {
-                    alert('Для загрузки данных из таблицы требуется авторизация (телефон и ПИН-код).');
+                    showToast('Для загрузки данных с сервера требуется авторизация', 'error');
                     return false;
                 }
 
@@ -5933,7 +6058,7 @@
 
                     if (!rawCloudMonth || typeof rawCloudMonth !== 'object') {
                         setCloudStatus('saved');
-                        alert(`В Google Таблице нет сохранённых данных за ${monthTitle}`);
+                        showToast(`На сервере нет сохранённых данных за ${monthTitle}`, 'info');
                         return false;
                     }
 
@@ -5984,19 +6109,19 @@
                     }, 500);
 
                     setCloudStatus('saved');
-                    alert(`✓ Данные за ${monthTitle} загружены из Google Таблицы`);
+                    showToast(`✓ Данные за ${monthTitle} загружены с сервера`, 'success');
                     return true;
                 } catch (err) {
-                    console.error('Ошибка загрузки месяца из Google Таблицы:', err);
+                    console.error('Ошибка загрузки месяца с сервера:', err);
                     setCloudStatus('error');
                     setCloudErrorMsg(err.message || 'Ошибка загрузки месяца');
-                    alert('Ошибка загрузки данных из таблицы: ' + (err.message || err));
+                    showToast('Ошибка загрузки данных с сервера: ' + (err.message || err), 'error');
                     isHydratingRef.current = false;
                     return false;
                 }
             };
 
-            /* ── Сохранение месяца в Google Таблицу ── */
+            /* ── Сохранение месяца на сервер ── */
             const saveMonthCloud = async (customMonthData, customKey) => {
                 const phone = normalizePhone(userPhone);
                 const pin = normalizePin(userPin);
@@ -6041,9 +6166,14 @@
             const handleClearMonth = async () => {
                 const [y, m] = currentMonthKey.split('-').map(Number);
                 const monthName = MONTH_NAMES[m] || `${m}`;
-                const confirmed = confirm(
-                    'Очистить все данные за ' + monthName + ' ' + y + ' (одометр, топливо, заправки, рабочие дни и маршруты)? Данные будут сброшены локально и в Google Таблице.'
-                );
+                const confirmed = showConfirm
+                    ? await showConfirm({
+                        title: 'Очистка месяца',
+                        message: 'Очистить все данные за ' + monthName + ' ' + y + ' (одометр, топливо, заправки, рабочие дни и маршруты)? Данные будут сброшены локально и на сервере.',
+                        confirmText: 'Очистить месяц',
+                        danger: true
+                    })
+                    : true;
                 if (!confirmed) return;
 
                 const totDays = daysInMonth(y, m);
@@ -6082,14 +6212,14 @@
                     try {
                         await saveMonthCloud(emptyMonth, currentMonthKey);
                     } catch (e) {
-                        console.error('Ошибка сохранения очищенного месяца в Google Таблицу:', e);
+                        console.error('Ошибка сохранения очищенного месяца на сервер:', e);
                     }
                 }
 
-                alert('✓ Месяц очищен локально и в Google Таблице');
+                showToast('✓ Месяц очищен локально и на сервере', 'success');
             };
 
-            /* ── Сохранение справочника адресов в Google Таблицу ── */
+            /* ── Сохранение справочника адресов на сервер ── */
             const saveAddressesCloud = async (customAddresses) => {
                 const phone = normalizePhone(userPhone);
                 const pin = normalizePin(userPin);
@@ -6234,11 +6364,11 @@
                     workdays: recalced
                 }, true);
 
-                alert(`✓ Успешно распределено ${totalAdded} км по ${daysCount} дням месяца! Цепочка одометров пересчитана.`);
+                showToast(`✓ Успешно распределено ${totalAdded} км по ${daysCount} дням месяца!`, 'success');
             };
 
             /* ── Применение сгенерированных маршрутов-петель к месяцу ── */
-            const handleApplyRoutes = (routePreviewMap) => {
+            const handleApplyRoutes = async (routePreviewMap) => {
                 if (!routePreviewMap || Object.keys(routePreviewMap).length === 0) return;
 
                 const year = currentMonthData.year;
@@ -6280,10 +6410,14 @@
                 // Проверка на отрицательный остаток топлива
                 const hasNegativeFuel = Object.values(recalced).some(d => d.isWorkday && Number(d.fuelEnd) < -0.0001);
                 if (hasNegativeFuel) {
-                    const proceed = confirm(
-                        'Внимание: после пересчёта маршрутов в некоторые дни остаток топлива опускается ниже нуля.\n' +
-                        'Применить изменения всё равно?'
-                    );
+                    const proceed = showConfirm
+                        ? await showConfirm({
+                            title: 'Отрицательный остаток топлива',
+                            message: 'После пересчёта маршрутов в некоторые дни остаток топлива опускается ниже нуля.\nПрименить изменения всё равно?',
+                            confirmText: 'Применить всё равно',
+                            danger: true
+                        })
+                        : true;
                     if (!proceed) return;
                 }
 
@@ -6292,14 +6426,14 @@
                     workdays: recalced
                 }, true);
 
-                alert(`✓ Успешно заполнено ${totalTripsCount} точек маршрута в ${daysUpdated} рабочих днях месяца! Цепочка одометров пересчитана.`);
+                showToast(`✓ Заполнено ${totalTripsCount} точек маршрута в ${daysUpdated} рабочих днях`, 'success');
             };
 
             /* ── Экспорт отчёта в .xlsx по шаблону template.xlsx ── */
             const exportReportToExcel = async (exportProfile, exportMonthData) => {
                 if (isExporting) return;
                 if (typeof ExcelJS === 'undefined') {
-                    alert('Ошибка: библиотека ExcelJS не загружена. Проверьте подключение к интернету.');
+                    showToast('Ошибка: библиотека ExcelJS не загружена. Проверьте интернет.', 'error');
                     return;
                 }
                 setIsExporting(true);
@@ -6448,7 +6582,7 @@
                         } catch {}
                     }
                 } catch (err) {
-                    alert(`Ошибка экспорта: ${err.message || err}`);
+                    showToast(`Ошибка экспорта: ${err.message || err}`, 'error');
                 } finally {
                     setIsExporting(false);
                 }
@@ -6466,7 +6600,7 @@
                 const prevKey = getPrevMonthKey(targetYear, targetMonth);
                 const prevData = months[prevKey];
                 if (!prevData) {
-                    if (force) alert(`Данные за ${prevKey} не найдены`);
+                    if (force) showToast(`Данные за ${prevKey} не найдены`, 'info');
                     return;
                 }
 
@@ -6500,7 +6634,7 @@
                 userChangedMonthRef.current = true;
                 setMonths(prev => ({ ...prev, [targetKey]: updated }));
                 if (force) {
-                    alert(`Перенесены остатки из ${prevKey}:\n• Одометр: ${prevSummary.odometerEnd} км\n• Топливо: ${prevSummary.fuelEnd} л`);
+                    showToast(`✓ Перенесены остатки из ${prevKey}: одометр ${prevSummary.odometerEnd} км, топливо ${prevSummary.fuelEnd} л`, 'success');
                 }
             }, [months, profile, getOrCreateMonth]);
 
@@ -6517,39 +6651,45 @@
             const t = makeT(theme);
 
             /* ── Стили интерфейса ── */
-            const appBg = t(
-                'bg-[#101112] text-gray-100',
-                'bg-[#F0F2F5] text-gray-900',
-                'bg-pink-50 text-gray-900',
-                'bg-blue-50 text-gray-900',
-                'bg-emerald-50 text-gray-900',
-                'bg-[#F5F2EE] text-gray-900',
-                'bg-[#F4F5F7] text-gray-900'
-            );
+            const appBg = theme === 'pastel'
+                ? 'bg-pastel-theme text-slate-900'
+                : t(
+                    'bg-[#101112] text-gray-100',
+                    'bg-[#F0F2F5] text-gray-900',
+                    'bg-pink-50 text-gray-900',
+                    'bg-blue-50 text-gray-900',
+                    'bg-emerald-50 text-gray-900',
+                    'bg-[#F5F2EE] text-gray-900',
+                    'bg-[#F4F5F7] text-gray-900'
+                );
 
-            const headerBg = t(
-                'bg-[#1A1D21] border-[#3A3D42]',
-                'bg-white border-gray-200',
-                'bg-white border-pink-200',
-                'bg-white border-blue-200',
-                'bg-white border-emerald-200',
-                'bg-[#FDFBF7] border-[#D7CCC8]',
-                'bg-white border-gray-200'
-            );
+            const headerBg = theme === 'pastel'
+                ? 'bg-white/55 backdrop-blur-md border-white/70'
+                : t(
+                    'bg-[#1A1D21] border-[#3A3D42]',
+                    'bg-white border-gray-200',
+                    'bg-white border-pink-200',
+                    'bg-white border-blue-200',
+                    'bg-white border-emerald-200',
+                    'bg-[#FDFBF7] border-[#D7CCC8]',
+                    'bg-white border-gray-200'
+                );
 
-            /* Фирменные градиенты шапки из themes_ref.html для всех 9 тем */
+            /* Фирменные градиенты шапки из themes_ref.html для всех тем */
             const headerGradient = theme === 'newyear'
                 ? 'bg-gradient-to-r from-[#0F291E] via-[#7F1D1D] to-[#0F291E] border-[#FBBF24]/60'
                 : (theme === 'expert' || theme === 'expert-dark')
                     ? 'bg-gradient-to-r from-[#4A0B11] via-[#75161F] to-[#4A0B11] border-[#C62828]/50'
-                    : t(
-                        'bg-gradient-to-r from-[#1A1D21] via-[#282B30] to-[#1A1D21] border-[#FFB300]/50',
-                        'bg-gradient-to-r from-amber-700 via-amber-600 to-amber-700 border-amber-800',
-                        'bg-gradient-to-r from-pink-700 via-pink-600 to-pink-700 border-pink-800',
-                        'bg-gradient-to-r from-[#0F2547] via-[#1D4ED8] to-[#0F2547] border-blue-400/30',
-                        'bg-gradient-to-r from-emerald-800 via-emerald-600 to-emerald-800 border-emerald-900',
-                        'bg-gradient-to-r from-[#3E2723] via-[#5D4037] to-[#3E2723] border-[#8D6E63]/40'
-                    );
+                    : theme === 'pastel'
+                        ? 'bg-gradient-to-r from-[#D96B78]/85 via-[#4AA89B]/85 to-[#6366C6]/85 backdrop-blur-md border-white/50'
+                        : t(
+                            'bg-gradient-to-r from-[#1A1D21] via-[#282B30] to-[#1A1D21] border-[#FFB300]/50',
+                            'bg-gradient-to-r from-amber-700 via-amber-600 to-amber-700 border-amber-800',
+                            'bg-gradient-to-r from-pink-700 via-pink-600 to-pink-700 border-pink-800',
+                            'bg-gradient-to-r from-[#0F2547] via-[#1D4ED8] to-[#0F2547] border-blue-400/30',
+                            'bg-gradient-to-r from-emerald-800 via-emerald-600 to-emerald-800 border-emerald-900',
+                            'bg-gradient-to-r from-[#3E2723] via-[#5D4037] to-[#3E2723] border-[#8D6E63]/40'
+                        );
 
             const accentClass = t(
                 'text-[#FFB300]','text-amber-800','text-pink-600',
@@ -6700,19 +6840,19 @@
                                     {/* Индикатор облачной синхронизации */}
                                     <div className="flex items-center px-2.5 py-1.5 rounded-xl border border-white/20 bg-white/10 text-white text-xs font-semibold">
                                         {cloudStatus === 'syncing' && (
-                                            <span className="flex items-center gap-1.5 text-amber-300 animate-pulse font-bold" title="Синхронизация с Google Таблицей">
+                                            <span className="flex items-center gap-1.5 text-amber-300 animate-pulse font-bold" title="Синхронизация с сервером">
                                                 <IconCloudSync size={16} />
                                                 <span className="hidden sm:inline">Сохранение...</span>
                                             </span>
                                         )}
                                         {cloudStatus === 'saved' && (
-                                            <span className="flex items-center gap-1.5 text-emerald-300 font-bold" title="Данные синхронизированы с Google Таблицей">
+                                            <span className="flex items-center gap-1.5 text-emerald-300 font-bold" title="Данные синхронизированы с сервером">
                                                 <IconCloudCheck size={16} />
                                                 <span className="hidden sm:inline">Облако ✓</span>
                                             </span>
                                         )}
                                         {cloudStatus === 'error' && (
-                                            <span className="flex items-center gap-1.5 text-rose-300 font-bold cursor-pointer" title={cloudErrorMsg || 'Ошибка облака'} onClick={() => alert(cloudErrorMsg || 'Ошибка синхронизации')}>
+                                            <span className="flex items-center gap-1.5 text-rose-300 font-bold cursor-pointer" title={cloudErrorMsg || 'Ошибка облака'} onClick={() => showToast(cloudErrorMsg || 'Ошибка синхронизации', 'error')}>
                                                 <IconAlertTriangle size={16} />
                                                 <span className="hidden sm:inline">Ошибка</span>
                                             </span>
@@ -6860,6 +7000,8 @@
                                     userPhone={userPhone}
                                     onSaveCloud={() => saveProfileCloud(profile)}
                                     cloudStatus={cloudStatus}
+                                    showToast={showToast}
+                                    showAlert={showAlert}
                                     t={t}
                                 />
                             )}
@@ -6886,6 +7028,9 @@
                                     cloudStatus={cloudStatus}
                                     userPhone={userPhone}
                                     theme={theme}
+                                    showToast={showToast}
+                                    showConfirm={showConfirm}
+                                    showAlert={showAlert}
                                     t={t}
                                 />
                             )}
@@ -6906,6 +7051,9 @@
                                     cloudStatus={cloudStatus}
                                     onExportExcel={() => exportReportToExcel(profile, currentMonthData)}
                                     userPhone={userPhone}
+                                    showToast={showToast}
+                                    showConfirm={showConfirm}
+                                    showAlert={showAlert}
                                     t={t}
                                 />
                             )}
@@ -7033,6 +7181,123 @@
                                         );
                                     })}
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ══ ГЛОБАЛЬНЫЙ ДИАЛОГ (CONFIRM / ALERT) ══ */}
+                    {dialog && (
+                        <div
+                            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in"
+                            onClick={(e) => {
+                                if (e.target === e.currentTarget) {
+                                    handleDialogClose(dialog.mode === 'confirm' ? false : undefined);
+                                }
+                            }}
+                        >
+                            <div className={`w-full max-w-sm sm:max-w-md rounded-2xl border shadow-2xl p-5 sm:p-6 transition-all ${
+                                t(
+                                    'bg-[#282B30] border-gray-700 text-white',
+                                    'bg-white border-gray-200 text-gray-900',
+                                    'bg-white border-pink-200 text-pink-900',
+                                    'bg-white border-blue-200 text-blue-900',
+                                    'bg-white border-emerald-200 text-emerald-900',
+                                    'bg-[#FDFBF7] border-[#D7CCC8] text-[#3E2723]',
+                                    'bg-white border-gray-200 text-gray-900'
+                                )
+                            }`}>
+                                <div className="flex items-center justify-between gap-3 pb-3 border-b border-current/10 mb-3">
+                                    <h3 className={`text-base font-bold flex items-center gap-2 ${
+                                        dialog.danger ? 'text-rose-500' : accentClass
+                                    }`}>
+                                        {dialog.danger ? '⚠️ ' : ''}{dialog.title}
+                                    </h3>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDialogClose(dialog.mode === 'confirm' ? false : undefined)}
+                                        className="w-8 h-8 flex items-center justify-center rounded-lg opacity-60 hover:opacity-100 hover:bg-black/10 transition-all text-lg font-bold leading-none"
+                                        aria-label="Закрыть"
+                                    >
+                                        &times;
+                                    </button>
+                                </div>
+
+                                <div className="text-xs sm:text-sm opacity-90 whitespace-pre-wrap leading-relaxed mb-5 max-h-[60vh] overflow-y-auto">
+                                    {dialog.message}
+                                </div>
+
+                                <div className="flex items-center justify-end gap-2.5">
+                                    {dialog.mode === 'confirm' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDialogClose(false)}
+                                            className={`px-4 py-2 min-h-[38px] rounded-lg text-xs sm:text-sm font-semibold border transition-all ${
+                                                t(
+                                                    'bg-white/5 border-white/20 text-gray-300 hover:bg-white/10',
+                                                    'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200',
+                                                    'bg-pink-100 border-pink-200 text-pink-700 hover:bg-pink-200',
+                                                    'bg-blue-100 border-blue-200 text-blue-700 hover:bg-blue-200',
+                                                    'bg-emerald-100 border-emerald-200 text-emerald-700 hover:bg-emerald-200',
+                                                    'bg-[#EFEBE9] border-[#D7CCC8] text-[#3E2723] hover:bg-[#D7CCC8]',
+                                                    'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
+                                                )
+                                            }`}
+                                        >
+                                            {dialog.cancelText || 'Отмена'}
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDialogClose(true)}
+                                        className={`px-4 py-2 min-h-[38px] rounded-lg text-xs sm:text-sm font-bold shadow-md transition-all ${
+                                            dialog.danger
+                                                ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-900/30'
+                                                : btnPrimary
+                                        }`}
+                                    >
+                                        {dialog.confirmText || (dialog.mode === 'confirm' ? 'Подтвердить' : 'Понятно')}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ══ ВСПЛЫВАЮЩИЙ TOAST ══ */}
+                    {toast && (
+                        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[80] max-w-md w-[calc(100%-2rem)] animate-fade-in pointer-events-auto">
+                            <div className={`p-3.5 rounded-xl border shadow-xl flex items-center justify-between gap-3 ${
+                                toast.type === 'error'
+                                    ? 'bg-rose-950/95 border-rose-500/60 text-rose-100 shadow-rose-950/50'
+                                    : toast.type === 'success'
+                                    ? 'bg-emerald-950/95 border-emerald-500/60 text-emerald-100 shadow-emerald-950/50'
+                                    : t(
+                                        'bg-[#282B30]/95 border-gray-700 text-white shadow-black/40',
+                                        'bg-white/95 border-amber-300 text-gray-900 shadow-amber-900/10',
+                                        'bg-pink-950/95 border-pink-500/60 text-pink-100 shadow-pink-950/40',
+                                        'bg-[#0F1E36]/95 border-blue-500/60 text-blue-100 shadow-blue-950/40',
+                                        'bg-emerald-950/95 border-emerald-500/60 text-emerald-100 shadow-emerald-950/40',
+                                        'bg-[#2A1D18]/95 border-[#8D6E63]/60 text-[#F5EBE6] shadow-black/40',
+                                        'bg-[#2C0B0E]/95 border-red-500/60 text-red-100 shadow-red-950/40'
+                                    )
+                            }`}>
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                    {toast.type === 'error' ? (
+                                        <span className="text-rose-400 shrink-0 text-base">⚠️</span>
+                                    ) : toast.type === 'success' ? (
+                                        <span className="text-emerald-400 shrink-0 text-base">✓</span>
+                                    ) : (
+                                        <span className="text-sky-400 shrink-0 text-base">ℹ</span>
+                                    )}
+                                    <span className="text-xs sm:text-sm font-medium leading-snug break-words">{toast.message}</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setToast(null)}
+                                    className="p-1 rounded-lg opacity-70 hover:opacity-100 text-lg leading-none shrink-0"
+                                    aria-label="Закрыть"
+                                >
+                                    &times;
+                                </button>
                             </div>
                         </div>
                     )}
