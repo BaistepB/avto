@@ -256,6 +256,72 @@
             return R * c;
         };
 
+        /** Расчёт расстояния между двумя точками с координатами {lat, lon} в км */
+        const haversineKm = (p1, p2) => {
+            if (!p1 || !p2) return 0;
+            return haversineDistance(p1.lat, p1.lon, p2.lat, p2.lon);
+        };
+
+        /** Географический центр Москвы */
+        const MOSCOW_CENTER = { lat: 55.7558, lon: 37.6173 };
+
+        /** Азимут в градусах (0..360) от точки from к точке to (0° = Север, 90° = Восток, 180° = Юг, 270° = Запад) */
+        const getBearingDeg = (from, to) => {
+            if (!from || !to) return 0;
+            const lat1 = from.lat * Math.PI / 180;
+            const lon1 = from.lon * Math.PI / 180;
+            const lat2 = to.lat * Math.PI / 180;
+            const lon2 = to.lon * Math.PI / 180;
+            const dLon = lon2 - lon1;
+            const y = Math.sin(dLon) * Math.cos(lat2);
+            const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+            const rad = Math.atan2(y, x);
+            return (rad * 180 / Math.PI + 360) % 360;
+        };
+
+        /** Минимальная разница углов в градусах (0..180) */
+        const angleDiffDeg = (a, b) => {
+            const d = Math.abs(a - b) % 360;
+            return d > 180 ? 360 - d : d;
+        };
+
+        /** Фильтрация адреса кандидата по сектору и дальности выезда относительно Точки старта */
+        const isAddressInEmployeeSector = (startCoords, candCoords, maxAngleOverride = null) => {
+            if (!startCoords || !candCoords) return false;
+            const startDistFromCenter = haversineKm(MOSCOW_CENTER, startCoords);
+            const candDistFromCenter = haversineKm(MOSCOW_CENTER, candCoords);
+            const distFromStart = haversineKm(startCoords, candCoords);
+
+            // 3. Лимит дальности выезда
+            if (startDistFromCenter <= 20) {
+                if (distFromStart > 85) return false;
+            } else {
+                if (distFromStart > 90) return false;
+            }
+
+            // 4. Старт в самом центре Москвы (< 5 км) — доступно всё в пределах дальности
+            if (startDistFromCenter < 5) {
+                return true;
+            }
+
+            // 5. Кандидат внутри Москвы (<= 18 км)
+            if (candDistFromCenter <= 18) {
+                if (startDistFromCenter <= 20) {
+                    return true;
+                }
+                return distFromStart <= 60;
+            }
+
+            // 6. Кандидат в Московской области (> 18 км)
+            const startBearing = getBearingDeg(MOSCOW_CENTER, startCoords);
+            const candBearing = getBearingDeg(MOSCOW_CENTER, candCoords);
+            const maxAngle = (maxAngleOverride !== null && maxAngleOverride !== undefined)
+                ? maxAngleOverride
+                : (startDistFromCenter <= 20 ? 80 : 65);
+
+            return angleDiffDeg(startBearing, candBearing) <= maxAngle;
+        };
+
         /** Поиск приблизительных координат адреса (офлайн-fallback) */
         const findApproxCoords = (addr) => {
             const str = String(addr || '').toLowerCase();
@@ -3499,26 +3565,57 @@
                     usedInMonth.add(cleanStart);
                     usedInMonth.add(cleanOffice);
 
-                    // 4. Формируем колоду доступных адресов без повторов (офис гарантированно исключён)
-                    const availableUser = userAddressesWithCoords
+                    // 4. Формируем единую колоду кандидатов без повторов (офис гарантированно исключён)
+                    const rawCandidates = [...userAddressesWithCoords, ...MOSCOW_MO_ADDRESS_POOL]
                         .filter(a => {
                             const k = normalizeGeoKey(a.address);
                             return k && k !== cleanStart && !isOfficeAddress(a.address) && !usedInMonth.has(k);
-                        })
-                        .sort(() => 0.5 - Math.random());
+                        });
 
-                    const availablePool = MOSCOW_MO_ADDRESS_POOL
-                        .filter(a => {
+                    const seenCandKeys = new Set();
+                    const uniqueCandidates = [];
+                    rawCandidates.forEach(cand => {
+                        const k = normalizeGeoKey(cand.address);
+                        if (!seenCandKeys.has(k)) {
+                            seenCandKeys.add(k);
+                            uniqueCandidates.push(cand);
+                        }
+                    });
+
+                    // Фильтрация по сектору от Точки старта сотрудника и дальности выезда
+                    let sectorDeck = uniqueCandidates.filter(a => isAddressInEmployeeSector(startCoords, a));
+
+                    // Безопасный fallback: если кандидатов меньше 15, добираем с расширенным углом 105° (дальность <= 90 км)
+                    if (sectorDeck.length < 15) {
+                        const sectorKeys = new Set(sectorDeck.map(a => normalizeGeoKey(a.address)));
+                        const extras105 = uniqueCandidates.filter(a => {
                             const k = normalizeGeoKey(a.address);
-                            return k && k !== cleanStart && !isOfficeAddress(a.address) && !usedInMonth.has(k);
-                        })
-                        .sort(() => 0.5 - Math.random());
-
-                    let availableDeck = [...availableUser, ...availablePool];
-                    if (availableDeck.length === 0) {
-                        // Если все адреса заняты, повторно открываем пул Москвы и МО (без старта и офиса)
-                        availableDeck = [...MOSCOW_MO_ADDRESS_POOL.filter(a => normalizeGeoKey(a.address) !== cleanStart && !isOfficeAddress(a.address))];
+                            return !sectorKeys.has(k) && isAddressInEmployeeSector(startCoords, a, 105);
+                        });
+                        sectorDeck = [...sectorDeck, ...extras105];
                     }
+
+                    // Если и после fallback мало (например, крайний город МО) — добираем по дальности <= 90 км
+                    if (sectorDeck.length < 15) {
+                        const sectorKeys = new Set(sectorDeck.map(a => normalizeGeoKey(a.address)));
+                        const distLimit = haversineKm(MOSCOW_CENTER, startCoords) <= 20 ? 85 : 90;
+                        const extrasDist = uniqueCandidates.filter(a => {
+                            const k = normalizeGeoKey(a.address);
+                            return !sectorKeys.has(k) && haversineKm(startCoords, a) <= distLimit;
+                        });
+                        sectorDeck = [...sectorDeck, ...extrasDist];
+                    }
+
+                    // Если все адреса были заняты, открываем пул МО по сектору
+                    if (sectorDeck.length === 0) {
+                        sectorDeck = MOSCOW_MO_ADDRESS_POOL.filter(a =>
+                            normalizeGeoKey(a.address) !== cleanStart &&
+                            !isOfficeAddress(a.address) &&
+                            isAddressInEmployeeSector(startCoords, a, 105)
+                        );
+                    }
+
+                    let availableDeck = sectorDeck.sort(() => 0.5 - Math.random());
 
                     const newPreview = {};
                     const newCacheEntries = {};
@@ -3586,14 +3683,23 @@
 
                         const otherPointsNeeded = includeOffice ? Math.max(1, pointsCount - 1) : pointsCount;
 
-                        // Если в колоде мало адресов, пополняем её из пула Москвы и МО (без старта и офиса)
+                        // Если в колоде мало адресов, пополняем её из пула кандидатов сектора
                         if (availableDeck.length < otherPointsNeeded) {
-                            const refill = [...MOSCOW_MO_ADDRESS_POOL.filter(a => normalizeGeoKey(a.address) !== cleanStart && !isOfficeAddress(a.address))]
+                            let refill = uniqueCandidates
+                                .filter(a => isAddressInEmployeeSector(startCoords, a))
                                 .sort(() => 0.5 - Math.random());
+                            if (refill.length < otherPointsNeeded) {
+                                refill = uniqueCandidates
+                                    .filter(a => isAddressInEmployeeSector(startCoords, a, 105))
+                                    .sort(() => 0.5 - Math.random());
+                            }
+                            if (refill.length < otherPointsNeeded) {
+                                refill = uniqueCandidates.sort(() => 0.5 - Math.random());
+                            }
                             availableDeck = [...availableDeck, ...refill];
                         }
 
-                        // 5. Перебор до 25 комбинаций в памяти: приоритетно выбираем петлю <= dayCapKm
+                        // 5. Перебор до 25 комбинаций в памяти: приоритетно выбираем петлю <= dayCapKm с учётом кучности (кластеризации)
                         let bestCombo = null;
                         let bestDiff = Infinity;
                         let bestWithinCap = null;
@@ -3611,16 +3717,28 @@
                             }
 
                             const estKm = estimateCoordsLoopKm(candidateList);
-                            const diff = Math.abs(estKm - targetKmForDay);
-                            if (diff < bestDiff) {
-                                bestDiff = diff;
+
+                            // Кластеризация: максимальное расстояние между точками внутри одного дня
+                            let maxSpreadKm = 0;
+                            for (let p1 = 0; p1 < candidateList.length; p1++) {
+                                for (let p2 = p1 + 1; p2 < candidateList.length; p2++) {
+                                    const d = haversineKm(candidateList[p1], candidateList[p2]);
+                                    if (d > maxSpreadKm) maxSpreadKm = d;
+                                }
+                            }
+                            // Штраф к оценке, если точки раскиданы более чем на 55 км друг от друга
+                            const spreadPenalty = maxSpreadKm > 55 ? (maxSpreadKm - 55) * 1.5 : 0;
+                            const score = Math.abs(estKm - targetKmForDay) + spreadPenalty;
+
+                            if (score < bestDiff) {
+                                bestDiff = score;
                                 bestCombo = candidateList;
                             }
 
                             // Приоритетно оцениваем комбинации, чья оценка <= dayCapKm
                             if (estKm <= dayCapKm) {
-                                if (diff < bestDiffWithinCap) {
-                                    bestDiffWithinCap = diff;
+                                if (score < bestDiffWithinCap) {
+                                    bestDiffWithinCap = score;
                                     bestWithinCap = candidateList;
                                 }
                             }
