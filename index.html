@@ -829,6 +829,59 @@
             return updated;
         };
 
+        /**
+         * Вычисляет максимально допустимый пробег (целое число км) для дня dateKey,
+         * при котором остаток топлива не опустится ниже minReserveLiters (по умолчанию 0.2 л)
+         * ни в сам день dateKey, ни во ВСЕ последующие дни месяца (с учётом уже заданных
+         * пробегов в других днях и всех заправок refuels).
+         */
+        const getMaxSafeKmForDay = (workdaysDraft, dateKey, refuels, fuelStart, norm, minReserveLiters = 0.2) => {
+            const activeNorm = Number(norm) || 0;
+            if (activeNorm <= 0) return 999999;
+
+            const [year, month] = dateKey.split('-').map(Number);
+            const totalDays = daysInMonth(year, month);
+
+            const refuelMap = {};
+            (refuels || []).forEach(r => {
+                if (!r.date) return;
+                refuelMap[r.date] = (refuelMap[r.date] || 0) + (Number(r.liters) || 0);
+            });
+
+            let runningFuel = Number(fuelStart) || 0;
+            let minFuelFromDayOnward = Infinity;
+            let targetDayReached = false;
+
+            for (let d = 1; d <= totalDays; d++) {
+                const dk = toDateStr(year, month, d);
+                const day = (workdaysDraft && workdaysDraft[dk]) || {};
+                const refToday = refuelMap[dk] || 0;
+                runningFuel += refToday;
+
+                if (dk === dateKey) {
+                    targetDayReached = true;
+                }
+
+                // В dateKey пробег считается равным 0, для остальных дней — их фактический пробег
+                const km = (dk === dateKey) ? 0 : (day.isWorkday ? (Number(day.tripKm) || 0) : 0);
+                const spent = activeNorm > 0 ? (km * activeNorm / 100) : 0;
+                runningFuel -= spent;
+
+                if (targetDayReached) {
+                    if (runningFuel < minFuelFromDayOnward) {
+                        minFuelFromDayOnward = runningFuel;
+                    }
+                }
+            }
+
+            if (!targetDayReached || minFuelFromDayOnward === Infinity) return 0;
+
+            const maxFuelSpendable = minFuelFromDayOnward - minReserveLiters;
+            if (maxFuelSpendable <= 0) return 0;
+
+            return Math.max(0, Math.floor((maxFuelSpendable / activeNorm) * 100));
+        };
+
         /* ═══════════════════════════════════════════════════
            5. ИНЛАЙН SVG-ИКОНКИ
         ═══════════════════════════════════════════════════ */
@@ -2855,100 +2908,86 @@
                 const sumR = randoms.reduce((a, b) => a + b, 0);
                 const rawAlloc = randoms.map(r => Math.round((r * targetTotal) / sumR));
 
-                // 1. Хронологический проход с отслеживанием runningFuel и ограничением maxAddable
+                // 1. Хронологический проход с точным контролем топлива через getMaxSafeKmForDay
                 const alloc = {};
                 selectedKeys.forEach(k => { alloc[k] = 0; });
 
-                let runningFuel = Number(monthData.fuelStart) || 0;
+                const simWorkdays = {};
+                for (let d = 1; d <= totalDays; d++) {
+                    const dk = toDateStr(year, month, d);
+                    const originalDay = workdays[dk];
+                    simWorkdays[dk] = originalDay
+                        ? { ...originalDay, isWorkday: !!originalDay.isWorkday, tripKm: Number(originalDay.tripKm) || 0 }
+                        : { isWorkday: false, tripKm: 0, trips: [] };
+                }
+
                 let unallocated = targetTotal;
 
                 for (let d = 1; d <= totalDays; d++) {
                     const k = toDateStr(year, month, d);
-                    const dayRefuels = (monthData.refuels || [])
-                        .filter(r => r.date === k)
-                        .reduce((s, r) => s + (Number(r.liters) || 0), 0);
-                    runningFuel += dayRefuels;
+                    if (!selectedKeys.includes(k)) continue;
 
-                    const dayObj = workdays[k];
-                    const existingKm = Number(dayObj?.tripKm) || 0;
+                    const idx = selectedKeys.indexOf(k);
+                    const desiredKm = rawAlloc[idx] || 0;
 
-                    if (selectedKeys.includes(k)) {
-                        const idx = selectedKeys.indexOf(k);
-                        const desiredKm = rawAlloc[idx] || 0;
+                    // Максимально безопасный пробег с учётом ВСЕХ будущих дней и заправок
+                    const safeCapKm = getMaxSafeKmForDay(
+                        simWorkdays,
+                        k,
+                        monthData.refuels,
+                        monthData.fuelStart,
+                        activeNorm,
+                        0.2
+                    );
 
-                        // Ограничение по реальному остатку топлива в баке (чтобы остаток оставался >= 0.100 л)
-                        const maxTotalKmByFuel = activeNorm > 0
-                            ? Math.floor(Math.max(0, runningFuel - 0.1) / activeNorm * 100)
-                            : Infinity;
-                        const maxAddable = Math.max(0, maxTotalKmByFuel - existingKm);
+                    const curBaseKm = Number(workdays[k]?.tripKm) || 0;
+                    const maxAddable = Math.max(0, safeCapKm - curBaseKm);
+                    const give = Math.min(desiredKm, maxAddable, unallocated);
+                    alloc[k] = give;
+                    unallocated -= give;
 
-                        // Назначаем не более maxAddable и не более unallocated
-                        const give = Math.min(desiredKm, maxAddable, unallocated);
-                        alloc[k] = give;
-                        unallocated -= give;
-
-                        const spent = activeNorm > 0 ? ((existingKm + give) * activeNorm / 100) : 0;
-                        runningFuel = Math.max(0, runningFuel - spent);
-                    } else {
-                        const spent = activeNorm > 0 ? (existingKm * activeNorm / 100) : 0;
-                        runningFuel = Math.max(0, runningFuel - spent);
-                    }
+                    // Фиксируем в simWorkdays для последующих дней
+                    simWorkdays[k].isWorkday = true;
+                    simWorkdays[k].tripKm = curBaseKm + give;
                 }
 
-                // 2. Доводка остатка unallocated / невязки delta по ±1 км с хронологической проверкой
+                // 2. Доводка остатка unallocated / невязки delta по ±1 км через getMaxSafeKmForDay
                 let currentSum = Object.values(alloc).reduce((a, b) => a + b, 0);
                 let delta = targetTotal - currentSum;
-
-                // Функция проверки запаса топлива от дня k до конца месяца
-                const checkHeadroomAhead = (currentAlloc, fromDateKey) => {
-                    let simFuel = Number(monthData.fuelStart) || 0;
-                    let minReserve = Infinity;
-                    for (let d = 1; d <= totalDays; d++) {
-                        const dk = toDateStr(year, month, d);
-                        const ref = (monthData.refuels || [])
-                            .filter(r => r.date === dk)
-                            .reduce((s, r) => s + (Number(r.liters) || 0), 0);
-                        simFuel += ref;
-
-                        const baseKm = Number(workdays[dk]?.tripKm) || 0;
-                        const addKm = Number(currentAlloc[dk]) || 0;
-                        const spent = activeNorm > 0 ? ((baseKm + addKm) * activeNorm / 100) : 0;
-                        simFuel -= spent;
-
-                        if (dk >= fromDateKey) {
-                            const reserve = simFuel - 0.1;
-                            if (reserve < minReserve) minReserve = reserve;
-                        }
-                    }
-                    return minReserve;
-                };
 
                 let loopSafety = 0;
                 while (delta !== 0 && loopSafety < 10000) {
                     loopSafety++;
                     if (delta > 0) {
-                        // Ищем дни, где добавление 1 км не уронит топливо ниже 0.1 л ни в один из последующих дней
                         const eligible = [];
                         for (const k of selectedKeys) {
-                            const reserve = checkHeadroomAhead(alloc, k);
-                            const fuelCost1Km = activeNorm > 0 ? (1 * activeNorm / 100) : 0;
-                            if (reserve >= fuelCost1Km) {
+                            const safeCap = getMaxSafeKmForDay(
+                                simWorkdays,
+                                k,
+                                monthData.refuels,
+                                monthData.fuelStart,
+                                activeNorm,
+                                0.2
+                            );
+                            const curBaseKm = Number(workdays[k]?.tripKm) || 0;
+                            const curTotalKm = curBaseKm + (alloc[k] || 0);
+                            if (curTotalKm + 1 <= safeCap) {
                                 eligible.push(k);
                             }
                         }
                         if (eligible.length === 0) break; // топливный бак физически исчерпан
-                        // Предпочитаем дни, где пробег меньше hi
                         const preferred = eligible.filter(k => alloc[k] < hi);
                         const pool = preferred.length > 0 ? preferred : eligible;
                         const chosen = pool[Math.floor(Math.random() * pool.length)];
                         alloc[chosen] += 1;
+                        simWorkdays[chosen].tripKm += 1;
                         delta -= 1;
                     } else {
-                        // delta < 0: уменьшаем только у дней, где пробег > 1 км
                         const eligible = selectedKeys.filter(k => alloc[k] > 1);
                         if (eligible.length === 0) break;
                         const chosen = eligible[Math.floor(Math.random() * eligible.length)];
                         alloc[chosen] -= 1;
+                        simWorkdays[chosen].tripKm -= 1;
                         delta += 1;
                     }
                 }
@@ -3272,6 +3311,37 @@
                     const cleanStart = normalizeGeoKey(startPoint);
                     const cleanOffice = normalizeGeoKey(DEFAULT_OFFICE_ADDRESS.address);
 
+                    // Черновик рабочих дней для пошагового контроля расхода топлива
+                    const tempWorkdays = {};
+                    for (let d = 1; d <= totalDays; d++) {
+                        const dk = toDateStr(year, month, d);
+                        const orig = workdays[dk];
+                        tempWorkdays[dk] = orig
+                            ? { ...orig, isWorkday: !!orig.isWorkday, tripKm: Number(orig.tripKm) || 0 }
+                            : { isWorkday: false, tripKm: 0, trips: [] };
+                    }
+
+                    // Проверяем, нет ли дефицита топлива в зафиксированных днях (например, из CSV)
+                    const preCheck = recalcWorkdays(
+                        tempWorkdays,
+                        monthData.odometerStart,
+                        monthData.fuelStart,
+                        monthData.refuels || [],
+                        activeNorm
+                    );
+                    const deficitDay = Object.keys(preCheck).sort().find(k => preCheck[k].isWorkday && Number(preCheck[k].fuelEnd) < -0.0001);
+                    if (deficitDay) {
+                        const [defY, defM, defD] = deficitDay.split('-');
+                        alert(`Внимание: обнаружен дефицит топлива в дне ${defD} ${MONTH_NAMES[Number(defM)]} (остаток: ${formatFuel(preCheck[deficitDay].fuelEnd)} л). Проверьте заправки перед подбором маршрутов!`);
+                        setIsGeneratingRoutes(false);
+                        setGenerationProgress('');
+                        return;
+                    }
+
+                    // Общий плановый километраж по генерируемым дням (с запасом не более +5%)
+                    const totalPlanKm = eligibleDayKeys.reduce((s, k) => s + (Number(workdays[k]?.tripKm) || 0), 0);
+                    let remainingMonthBudgetKm = Math.round(totalPlanKm * 1.05);
+
                     // 1. Геокодируем точку старта
                     const startCoords = await geocodeAddress(startPoint, yandexKey);
 
@@ -3348,12 +3418,37 @@
 
                         setGenerationProgress(`Подбор маршрутов: день ${dayIdx + 1} из ${eligibleDayKeys.length}...`);
 
-                        // Ограничение переноса невязки: не более ±20% от планового километража дня (и не более 190 км/день)
+                        // Безопасный потолок дня с учётом остатка топлива всех будущих дней
+                        const safeCapKm = getMaxSafeKmForDay(
+                            tempWorkdays,
+                            dateKey,
+                            monthData.refuels,
+                            monthData.fuelStart,
+                            activeNorm,
+                            0.2
+                        );
+
+                        if (safeCapKm < 15) {
+                            const [dY, dM, dD] = dateKey.split('-');
+                            alert(`Невозможно подобрать маршрут на ${dD} ${MONTH_NAMES[Number(dM)]}: доступный лимит топлива всего ${safeCapKm} км. Проверьте заправки или распределение пробега!`);
+                            setIsGeneratingRoutes(false);
+                            setGenerationProgress('');
+                            return;
+                        }
+
+                        // Ограничение переноса невязки: не более ±20% от планового километража дня
                         const maxDeltaAllowed = Math.round(plannedDayKm * 0.20 * 10) / 10;
                         const clampedDelta = Math.max(-maxDeltaAllowed, Math.min(maxDeltaAllowed, carryDelta));
                         const targetKmForDay = fitRoutesToMonthlyOdometer
                             ? Math.min(190, Math.max(20, Math.round((plannedDayKm + clampedDelta) * 10) / 10))
                             : plannedDayKm;
+
+                        // dayCapKm: не более 115% от цели, не более safeCapKm, не более остатка бюджета месяца
+                        const dayCapKm = Math.min(
+                            Math.round(targetKmForDay * 1.15),
+                            safeCapKm,
+                            Math.max(20, remainingMonthBudgetKm)
+                        );
 
                         // Включение заезда в офис/склад (~30–35% дней, не подряд)
                         let includeOffice = false;
@@ -3381,9 +3476,11 @@
                             availableDeck = [...availableDeck, ...refill];
                         }
 
-                        // 5. Перебор до 25 комбинаций в памяти: выбираем петлю с минимальным отклонением от targetKmForDay
+                        // 5. Перебор до 25 комбинаций в памяти: приоритетно выбираем петлю <= dayCapKm
                         let bestCombo = null;
                         let bestDiff = Infinity;
+                        let bestWithinCap = null;
+                        let bestDiffWithinCap = Infinity;
                         const attempts = Math.min(25, Math.max(8, availableDeck.length));
 
                         for (let a = 0; a < attempts; a++) {
@@ -3402,14 +3499,20 @@
                                 bestDiff = diff;
                                 bestCombo = candidateList;
                             }
+
+                            // Приоритетно оцениваем комбинации, чья оценка <= dayCapKm
+                            if (estKm <= dayCapKm) {
+                                if (diff < bestDiffWithinCap) {
+                                    bestDiffWithinCap = diff;
+                                    bestWithinCap = candidateList;
+                                }
+                            }
                         }
 
-                        if (!bestCombo || bestCombo.length === 0) {
-                            bestCombo = availableDeck.slice(0, otherPointsNeeded);
-                        }
+                        let chosenCombo = bestWithinCap || bestCombo || availableDeck.slice(0, otherPointsNeeded);
 
                         // Фиксируем выбранные адреса клиентов в usedInMonth и удаляем их из свободной колоды
-                        bestCombo.forEach(pt => {
+                        chosenCombo.forEach(pt => {
                             const k = normalizeGeoKey(pt.address);
                             if (k !== cleanOffice && k !== cleanStart) {
                                 usedInMonth.add(k);
@@ -3417,18 +3520,54 @@
                         });
                         availableDeck = availableDeck.filter(a => !usedInMonth.has(normalizeGeoKey(a.address)));
 
-                        // 6. Реальный расчёт выбранной дорожной петли через OSRM (ровно 1 запрос на день!)
-                        const loopCoords = [startCoords, ...bestCombo.map(p => ({ lat: p.lat, lon: p.lon })), startCoords];
-                        const osrmResult = await fetchOsrmLoop(loopCoords);
+                        // 6. Реальный расчёт выбранной дорожной петли через OSRM
+                        let currentCombo = [...chosenCombo];
+                        let loopCoords = [startCoords, ...currentCombo.map(p => ({ lat: p.lat, lon: p.lon })), startCoords];
+                        let osrmResult = await fetchOsrmLoop(loopCoords);
                         if (!osrmResult.isOffline) {
                             anyOsrm = true;
                         }
 
-                        const actualDayKm = osrmResult.totalKm;
-                        const legsKm = osrmResult.legs || [];
+                        let actualLoopKm = osrmResult.totalKm;
+                        let legsKm = osrmResult.legs || [];
+
+                        // Если реальный дорожный пробег превышает safeCapKm или бюджет месяца более чем на 5% — укорачиваем петлю
+                        const maxBudgetAllowed = Math.round(remainingMonthBudgetKm * 1.05);
+                        const effectiveMaxKm = Math.min(safeCapKm, maxBudgetAllowed);
+
+                        let trimTries = 0;
+                        while (Math.round(actualLoopKm) > effectiveMaxKm && currentCombo.length > 1 && trimTries < 4) {
+                            trimTries++;
+                            // Ищем самую дальнюю точку от старта
+                            let farthestIdx = -1;
+                            let maxDist = -1;
+                            for (let ci = 0; ci < currentCombo.length; ci++) {
+                                const pt = currentCombo[ci];
+                                const isOff = normalizeGeoKey(pt.address) === cleanOffice;
+                                if (isOff && currentCombo.length > 2) continue; // не удаляем офис, если есть клиенты
+                                const dFromStart = haversineDistance(startCoords.lat, startCoords.lon, pt.lat, pt.lon);
+                                if (dFromStart > maxDist) {
+                                    maxDist = dFromStart;
+                                    farthestIdx = ci;
+                                }
+                            }
+
+                            if (farthestIdx >= 0) {
+                                currentCombo.splice(farthestIdx, 1);
+                                loopCoords = [startCoords, ...currentCombo.map(p => ({ lat: p.lat, lon: p.lon })), startCoords];
+                                osrmResult = await fetchOsrmLoop(loopCoords);
+                                actualLoopKm = osrmResult.totalKm;
+                                legsKm = osrmResult.legs || [];
+                            } else {
+                                break;
+                            }
+                        }
+
+                        // Округляем итоговый пробег дня строго до целого числа (целевой километраж дня)
+                        const finalDayKm = Math.round(actualLoopKm);
 
                         // Сохраняем пары плеч в кэш расстояний
-                        const fullAddrs = [startPoint, ...bestCombo.map(p => p.address), startPoint];
+                        const fullAddrs = [startPoint, ...currentCombo.map(p => p.address), startPoint];
                         for (let li = 0; li < fullAddrs.length - 1; li++) {
                             const cKey = makeDistanceCacheKey(fullAddrs[li], fullAddrs[li + 1]);
                             const legDist = legsKm[li] || 0;
@@ -3436,11 +3575,12 @@
                         }
 
                         // Накапливаем разницу между плановым и фактическим пробегом
-                        const dayDiff = plannedDayKm - actualDayKm;
+                        const dayDiff = plannedDayKm - finalDayKm;
                         carryDelta += dayDiff;
+                        remainingMonthBudgetKm = Math.max(0, remainingMonthBudgetKm - finalDayKm);
 
                         // 7. Формируем промежуточные точки маршрута (чистые метки: taskType только для офиса/склада)
-                        const intermediateAddrs = bestCombo.map(p => p.address);
+                        const intermediateAddrs = currentCombo.map(p => p.address);
                         const dayTrips = intermediateAddrs.map((addr, idx) => {
                             const isOffice = normalizeGeoKey(addr) === cleanOffice;
                             const taskType = isOffice ? 'Офис и склад' : '';
@@ -3455,10 +3595,18 @@
                             };
                         });
 
+                        // ОБНОВЛЯЕМ tempWorkdays[dateKey].tripKm, чтобы следующий день в цикле сразу видел реальный остаток топлива!
+                        tempWorkdays[dateKey] = {
+                            ...tempWorkdays[dateKey],
+                            isWorkday: true,
+                            tripKm: finalDayKm,
+                            trips: dayTrips
+                        };
+
                         newPreview[dateKey] = {
                             dateKey,
                             targetKm: plannedDayKm,
-                            actualKm: actualDayKm,
+                            actualKm: finalDayKm,
                             intermediateAddrs,
                             trips: dayTrips,
                             chain: fullAddrs,
