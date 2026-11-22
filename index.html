@@ -48,8 +48,8 @@
             height: 100%;
             position: relative;
         }
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .hide-scrollbar::-webkit-scrollbar, .no-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar, .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
@@ -1263,6 +1263,25 @@
             </svg>
         );
 
+        const IconVolume = ({ size = 18, className = '' }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                 strokeLinejoin="round" className={className}>
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+            </svg>
+        );
+
+        const IconVolumeX = ({ size = 18, className = '' }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                 strokeLinejoin="round" className={className}>
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <line x1="23" y1="9" x2="17" y2="15"/>
+                <line x1="17" y1="9" x2="23" y2="15"/>
+            </svg>
+        );
+
         /* ═══════════════════════════════════════════════════
            6. КОМПОНЕНТ СНЕГОПАДА (тема newyear)
         ═══════════════════════════════════════════════════ */
@@ -1358,6 +1377,24 @@
                 'bg-emerald-600 text-white hover:bg-emerald-700',
                 'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
                 'bg-[#C62828] text-white hover:bg-[#B71C1C]'
+            );
+            const btnStepAction = t(
+                'bg-[#FFB300] text-black hover:bg-[#FFA000]',
+                'bg-amber-600 text-white hover:bg-amber-700',
+                'bg-pink-500 text-white hover:bg-pink-600',
+                'bg-blue-600 text-white hover:bg-blue-700',
+                'bg-teal-100 hover:bg-teal-200 text-teal-900 border border-teal-300',
+                'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
+                'bg-[#C62828] text-white hover:bg-[#B71C1C]'
+            );
+            const btnExportExcel = t(
+                'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white',
+                'bg-green-600 hover:bg-green-700 text-white',
+                'bg-pink-600 hover:bg-pink-700 text-white',
+                'bg-blue-600 hover:bg-blue-700 text-white',
+                'bg-teal-800 hover:bg-teal-900 text-white shadow-md border border-teal-600',
+                'bg-[#5D4037] hover:bg-[#4E342E] text-white',
+                'bg-[#C62828] hover:bg-[#B71C1C] text-white'
             );
 
             const cardClass = t(
@@ -1659,7 +1696,7 @@
         /* ═══════════════════════════════════════════════════
            8. КОМПОНЕНТ: НАСТРОЙКА МЕСЯЦА + РАБОЧИЕ ДНИ
         ═══════════════════════════════════════════════════ */
-        const MonthSetup = ({ monthData, profile, onUpdate, allMonths, onUpdateAllMonths, onChangeMonthKey, onPullPrevMonth, onSaveMonthCloud, onLoadMonthCloud, onClearMonth, onExportExcel, cloudStatus, userPhone, t }) => {
+        const MonthSetup = ({ monthData, profile, onUpdate, allMonths, onUpdateAllMonths, onChangeMonthKey, onPullPrevMonth, onSaveMonthCloud, onLoadMonthCloud, onClearMonth, onExportExcel, cloudStatus, userPhone, theme, t }) => {
 
             const year  = monthData.year;
             const month = monthData.month;
@@ -2293,6 +2330,24 @@
                 'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
                 'bg-[#C62828] text-white hover:bg-[#B71C1C]'
             );
+            const btnStepAction = t(
+                'bg-[#FFB300] text-black hover:bg-[#FFA000]',
+                'bg-amber-600 text-white hover:bg-amber-700',
+                'bg-pink-500 text-white hover:bg-pink-600',
+                'bg-blue-600 text-white hover:bg-blue-700',
+                'bg-teal-100 hover:bg-teal-200 text-teal-900 border border-teal-300',
+                'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
+                'bg-[#C62828] text-white hover:bg-[#B71C1C]'
+            );
+            const btnExportExcel = t(
+                'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white',
+                'bg-green-600 hover:bg-green-700 text-white',
+                'bg-pink-600 hover:bg-pink-700 text-white',
+                'bg-blue-600 hover:bg-blue-700 text-white',
+                'bg-teal-800 hover:bg-teal-900 text-white shadow-md border border-teal-600',
+                'bg-[#5D4037] hover:bg-[#4E342E] text-white',
+                'bg-[#C62828] hover:bg-[#B71C1C] text-white'
+            );
 
             const btnSecondary = t(
                 'bg-[#282B30] text-gray-300 hover:bg-[#32363C] border border-gray-700',
@@ -2304,15 +2359,10 @@
                 'bg-gray-100 text-gray-800 hover:bg-gray-200 border border-gray-300'
             );
 
-            const btnDangerOutline = t(
-                'border-red-500/50 text-red-400 hover:bg-red-500/10 hover:text-red-300',
-                'border-red-300 text-red-600 hover:bg-red-50',
-                'border-pink-300 text-red-600 hover:bg-pink-100',
-                'border-blue-300 text-red-600 hover:bg-blue-50',
-                'border-emerald-300 text-red-600 hover:bg-emerald-50',
-                'border-[#BCAAA4] text-red-700 hover:bg-[#EFEBE9]',
-                'border-red-400 text-red-500 hover:bg-red-500/10'
-            );
+            const isDarkTheme = theme === 'newyear' || theme === 'expert-dark' || theme === 'dark' || theme === 'marine' || theme === 'coffee';
+            const btnDangerOutline = isDarkTheme
+                ? 'text-rose-200 border-rose-400/40 bg-rose-500/15 hover:bg-rose-500/25'
+                : 'text-red-600 border-red-200 bg-red-50/60 hover:bg-red-100';
 
             return (
                 <div className="w-full space-y-4 animate-fade-in">
@@ -2359,43 +2409,23 @@
                                 </button>
                             </div>
                         </div>
-                        <div className="flex gap-2">
-                            <select
-                                className={`flex-1 p-2 text-[16px] sm:text-sm rounded border ${inputSm}`}
-                                value={month}
-                                onChange={e => {
-                                    const m = Number(e.target.value);
-                                    if (onChangeMonthKey) {
-                                        onChangeMonthKey(year, m);
-                                    } else {
-                                        const override = monthData.seasonOverride;
-                                        update({ month: m, seasonOverride: override });
-                                    }
-                                }}
-                            >
-                                {MONTH_NAMES.slice(1).map((n, i) => (
-                                    <option key={i+1} value={i+1}>{n}</option>
-                                ))}
-                            </select>
-                            <select
-                                className={`w-24 p-2 text-[16px] sm:text-sm rounded border ${inputSm}`}
-                                value={year}
-                                onChange={e => {
-                                    const y = Number(e.target.value);
-                                    if (onChangeMonthKey) {
-                                        onChangeMonthKey(y, month);
-                                    } else {
-                                        update({ year: y });
-                                    }
-                                }}
-                            >
-                                {[2024, 2025, 2026, 2027, 2028].map(y => (
-                                    <option key={y} value={y}>{y}</option>
-                                ))}
-                            </select>
+                        <div className="py-1">
+                            <h2 className={`text-base sm:text-lg font-bold tracking-tight ${
+                                t(
+                                    'text-gray-100',
+                                    'text-amber-900',
+                                    'text-pink-900 font-extrabold',
+                                    'text-sky-100',
+                                    'text-emerald-950 font-extrabold',
+                                    'text-[#F5EBE6]',
+                                    'text-[#9A1B24]'
+                                )
+                            }`}>
+                                {MONTH_NAMES[month]} {year}
+                            </h2>
                         </div>
                         {/* Сезонная норма */}
-                        <div className="flex items-center gap-3 mt-3">
+                        <div className="flex items-center gap-3 flex-wrap justify-start mt-3">
                             <span className="text-xs opacity-60">Сезон:</span>
                             <button
                                 onClick={() => update({ seasonOverride: activeSeason === 'summer' ? 'winter' : 'summer' })}
@@ -2411,7 +2441,7 @@
                                     авто
                                 </button>
                             )}
-                            <span className="text-xs opacity-60 ml-auto">
+                            <span className="text-xs opacity-60">
                                 норма: <strong>{activeNorm} л/100 км</strong>
                             </span>
                         </div>
@@ -2587,18 +2617,20 @@
                                 <span>Очистить рабочие дни</span>
                             </button>
                         </div>
-                        <p className="text-xs opacity-50 mb-3">
+                        <p className={`text-xs mb-3 ${t('text-gray-400', 'text-gray-500', 'text-pink-600', 'text-sky-300/80', 'text-emerald-700/80', 'text-[#D7B399]/80', 'text-gray-500')}`}>
                             1-е число может не быть рабочим. Входящие данные переходят на первый рабочий день.
                         </p>
 
-                        {/* Шапка таблицы */}
-                        <div className="grid gap-1 mb-1" style={{ gridTemplateColumns: '40px 1fr 80px 80px 80px 80px' }}>
+                        {/* Шапка таблицы — только на ПК (sm:) с увеличенным контрастным шрифтом */}
+                        <div className="hidden sm:grid gap-1 mb-1.5 px-1" style={{ gridTemplateColumns: '44px 1fr 90px 90px 90px 90px' }}>
                             {['День', 'Маршрут', 'Пробег (км)', 'Одометр', 'Остаток л', 'Расход л'].map(h => (
-                                <div key={h} className="text-[10px] font-bold opacity-50 text-center">{h}</div>
+                                <div key={h} className={`text-xs font-semibold text-center ${t('text-gray-400', 'text-gray-600', 'text-pink-700', 'text-sky-300', 'text-emerald-800', 'text-[#D7B399]', 'text-gray-600')}`}>
+                                    {h}
+                                </div>
                             ))}
                         </div>
 
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                             {allDayKeys.map(dateKey => {
                                 const day = workdays[dateKey] || {
                                     isWorkday: false, tripKm: 0,
@@ -2612,23 +2644,35 @@
                                 const fuelSpent = norm > 0 ? (km * norm / 100) : 0;
                                 const tripCount = (day.trips || []).length;
 
+                                const workdayRowStyle = theme === 'newyear'
+                                    ? (day.isWorkday ? 'bg-[#0E2A1E]/85 border-amber-400/40 text-amber-50' : 'opacity-40')
+                                    : (day.isWorkday
+                                        ? t(
+                                            'bg-[#1E2125] border-[#FFB300]/30 text-gray-100',
+                                            'bg-amber-50/80 border-amber-200 text-gray-900',
+                                            'bg-pink-50/80 border-pink-200 text-pink-950',
+                                            'bg-[#131D31] border-sky-500/30 text-sky-50',
+                                            'bg-emerald-50/80 border-emerald-200 text-emerald-950',
+                                            'bg-[#221A17] border-[#8D6E63]/30 text-[#F5EBE6]',
+                                            'bg-slate-50 border-red-200 text-gray-900'
+                                          )
+                                        : 'opacity-40');
+
                                 return (
-                                    <div key={dateKey} className="rounded border border-current/10 transition-colors overflow-hidden">
+                                    <div key={dateKey} className="rounded-lg border border-current/10 transition-colors overflow-hidden">
+                                        {/* ══ ДЕСКТОПНЫЙ ВИД (sm:) ══ */}
                                         <div
-                                            className={`grid gap-1 p-1 transition-colors ${
-                                                day.isWorkday
-                                                    ? t('bg-[#FFB300]/10', 'bg-amber-50', 'bg-pink-50', 'bg-blue-50', 'bg-emerald-50', 'bg-[#EFEBE9]', 'bg-red-50')
-                                                    : 'opacity-50'
-                                            }`}
-                                            style={{ gridTemplateColumns: '40px 1fr 80px 80px 80px 80px' }}
+                                            className={`hidden sm:grid gap-1 py-1.5 px-2 transition-colors items-center ${workdayRowStyle}`}
+                                            style={{ gridTemplateColumns: '44px 1fr 90px 90px 90px 90px' }}
                                         >
                                             {/* День + тоггл */}
                                             <button
+                                                type="button"
                                                 onClick={() => toggleWorkday(dateKey)}
-                                                className={`w-9 h-9 min-h-[36px] rounded flex items-center justify-center text-sm font-black border transition-colors ${
+                                                className={`w-10 h-10 min-h-[40px] rounded-lg flex items-center justify-center text-sm font-black border transition-colors ${
                                                     day.isWorkday
                                                         ? t('bg-[#FFB300] text-black border-[#FFB300]', 'bg-amber-500 text-white border-amber-500', 'bg-pink-500 text-white border-pink-500', 'bg-blue-600 text-white border-blue-600', 'bg-emerald-600 text-white border-emerald-600', 'bg-[#6D4C41] text-white border-[#6D4C41]', 'bg-[#C62828] text-white border-[#C62828]')
-                                                        : t('border-gray-700 text-gray-500', 'border-gray-300 text-gray-400', 'border-pink-200 text-pink-300', 'border-blue-200 text-blue-300', 'border-emerald-200 text-emerald-300', 'border-[#D7CCC8] text-[#A1887F]', 'border-gray-300 text-gray-400')
+                                                        : t('border-gray-700 text-gray-400', 'border-gray-300 text-gray-400', 'border-pink-200 text-pink-300', 'border-blue-200 text-blue-300', 'border-emerald-200 text-emerald-300', 'border-[#D7CCC8] text-[#A1887F]', 'border-gray-300 text-gray-400')
                                                 } ${hasRefuel ? 'ring-2 ring-yellow-400' : ''}`}
                                                 title={hasRefuel ? 'День с заправкой (всегда рабочий)' : (day.isWorkday ? 'Нажмите, чтобы снять' : 'Нажмите, чтобы сделать рабочим')}
                                             >
@@ -2642,23 +2686,23 @@
                                                         setExpandedDayKey(prev => prev === dateKey ? null : dateKey);
                                                     }
                                                 }}
-                                                className={`flex flex-col justify-center px-1 rounded transition-colors ${
-                                                    day.isWorkday ? 'cursor-pointer hover:bg-black/5 dark:hover:bg-white/5' : ''
+                                                className={`flex flex-col justify-center px-2 py-1 rounded transition-colors ${
+                                                    day.isWorkday ? 'cursor-pointer hover:bg-black/10 dark:hover:bg-white/10' : ''
                                                 }`}
                                                 title={day.isWorkday ? (expandedDayKey === dateKey ? 'Свернуть маршрут дня' : 'Нажмите, чтобы раскрыть цепочку: Старт → Точки → Финиш') : ''}
                                             >
                                                 <div className="flex items-center gap-1.5">
-                                                    <span className="text-[10px] font-bold opacity-80">
+                                                    <span className={`text-sm font-semibold ${t('text-gray-100', 'text-gray-900', 'text-pink-950', 'text-sky-100', 'text-emerald-950', 'text-[#F5EBE6]', 'text-gray-900')}`}>
                                                         {tripCount > 0 ? `${tripCount} промежуточн.` : 'Маршрут'}
                                                     </span>
                                                     {day.isWorkday && (
-                                                        <span className="text-[10px] opacity-60">
+                                                        <span className="text-xs opacity-60">
                                                             {expandedDayKey === dateKey ? '▲' : '▼'}
                                                         </span>
                                                     )}
                                                 </div>
                                                 {day.isWorkday && (
-                                                    <span className="text-[9px] opacity-50 truncate">
+                                                    <span className={`text-xs truncate ${t('text-gray-400', 'text-gray-500', 'text-pink-700', 'text-sky-300/80', 'text-emerald-700', 'text-[#D7B399]', 'text-gray-500')}`}>
                                                         {profile.startPoint ? `⚑ ${profile.startPoint}` : 'Старт не указан'}
                                                     </span>
                                                 )}
@@ -2669,52 +2713,136 @@
                                                 type="number"
                                                 inputMode="decimal"
                                                 disabled={!day.isWorkday}
-                                                className={`w-full p-1 text-[16px] sm:text-sm rounded border text-center ${inputSm} ${!day.isWorkday ? 'opacity-30' : ''}`}
+                                                className={`w-full p-1.5 text-sm font-semibold rounded border text-center ${inputSm} ${!day.isWorkday ? 'opacity-30' : ''}`}
                                                 value={day.isWorkday ? (km || '') : ''}
                                                 placeholder={day.isWorkday ? '0' : '—'}
                                                 onChange={e => setDayKm(dateKey, e.target.value)}
                                             />
 
                                             {/* Одометр конец */}
-                                            <div className="flex items-center justify-center text-xs font-mono opacity-70">
+                                            <div className={`flex items-center justify-center text-sm font-mono font-medium ${t('text-gray-200', 'text-gray-800', 'text-pink-900', 'text-sky-200', 'text-emerald-900', 'text-[#E6D5CC]', 'text-gray-800')}`}>
                                                 {day.isWorkday ? day.odometerEnd.toFixed(0) : '—'}
                                             </div>
 
                                             {/* Остаток топлива */}
-                                            <div className={`flex items-center justify-center text-xs font-mono ${
-                                                day.isWorkday && day.fuelEnd < 0 ? 'text-red-500 font-bold' : 'opacity-70'
+                                            <div className={`flex items-center justify-center text-sm font-mono font-medium ${
+                                                day.isWorkday && day.fuelEnd < 0
+                                                    ? 'text-red-400 font-bold'
+                                                    : t('text-gray-200', 'text-gray-800', 'text-pink-900', 'text-sky-200', 'text-emerald-900', 'text-[#E6D5CC]', 'text-gray-800')
                                             }`}>
                                                 {day.isWorkday ? formatFuel(day.fuelEnd) : '—'}
                                             </div>
 
                                             {/* Расход */}
-                                            <div className="flex items-center justify-center text-xs font-mono opacity-60">
+                                            <div className={`flex items-center justify-center text-sm font-mono font-medium ${t('text-gray-300', 'text-gray-700', 'text-pink-800', 'text-sky-300', 'text-emerald-800', 'text-[#D7B399]', 'text-gray-700')}`}>
                                                 {day.isWorkday && km > 0 ? formatFuel(fuelSpent) : '—'}
                                             </div>
                                         </div>
 
+                                        {/* ══ МОБИЛЬНЫЙ ВИД (< sm) ══ */}
+                                        <div className={`sm:hidden p-2.5 transition-colors ${workdayRowStyle}`}>
+                                            {/* Строка 1: [Кнопка числа дня] + [Маршрут] + [Поле пробега км] */}
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleWorkday(dateKey)}
+                                                    className={`w-9 h-9 min-h-[36px] shrink-0 rounded flex items-center justify-center text-sm font-black border transition-colors ${
+                                                        day.isWorkday
+                                                            ? t('bg-[#FFB300] text-black border-[#FFB300]', 'bg-amber-500 text-white border-amber-500', 'bg-pink-500 text-white border-pink-500', 'bg-blue-600 text-white border-blue-600', 'bg-emerald-600 text-white border-emerald-600', 'bg-[#6D4C41] text-white border-[#6D4C41]', 'bg-[#C62828] text-white border-[#C62828]')
+                                                            : t('border-gray-700 text-gray-400', 'border-gray-300 text-gray-400', 'border-pink-200 text-pink-300', 'border-blue-200 text-blue-300', 'border-emerald-200 text-emerald-300', 'border-[#D7CCC8] text-[#A1887F]', 'border-gray-300 text-gray-400')
+                                                    } ${hasRefuel ? 'ring-2 ring-yellow-400' : ''}`}
+                                                    title={hasRefuel ? 'День с заправкой (всегда рабочий)' : (day.isWorkday ? 'Нажмите, чтобы снять' : 'Нажмите, чтобы сделать рабочим')}
+                                                >
+                                                    {d}
+                                                </button>
+
+                                                <div
+                                                    onClick={() => {
+                                                        if (day.isWorkday) {
+                                                            setExpandedDayKey(prev => prev === dateKey ? null : dateKey);
+                                                        }
+                                                    }}
+                                                    className={`min-w-0 flex-1 flex flex-col justify-center px-1 rounded transition-colors ${
+                                                        day.isWorkday ? 'cursor-pointer hover:bg-black/10 dark:hover:bg-white/10' : ''
+                                                    }`}
+                                                    title={day.isWorkday ? (expandedDayKey === dateKey ? 'Свернуть маршрут дня' : 'Нажмите, чтобы раскрыть цепочку: Старт → Точки → Финиш') : ''}
+                                                >
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className={`text-sm font-semibold ${t('text-gray-100', 'text-gray-900', 'text-pink-950', 'text-sky-100', 'text-emerald-950', 'text-[#F5EBE6]', 'text-gray-900')}`}>
+                                                            {tripCount > 0 ? `${tripCount} промежуточн.` : 'Маршрут'}
+                                                        </span>
+                                                        {day.isWorkday && (
+                                                            <span className="text-xs opacity-60">
+                                                                {expandedDayKey === dateKey ? '▲' : '▼'}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {day.isWorkday && (
+                                                        <span className={`text-xs truncate ${t('text-gray-400', 'text-gray-500', 'text-pink-700', 'text-sky-300/80', 'text-emerald-700', 'text-[#D7B399]', 'text-gray-500')}`}>
+                                                            {profile.startPoint ? `⚑ ${profile.startPoint}` : 'Старт не указан'}
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <div className="w-20 shrink-0">
+                                                    <input
+                                                        type="number"
+                                                        inputMode="decimal"
+                                                        disabled={!day.isWorkday}
+                                                        className={`w-full p-1 text-[16px] sm:text-sm font-semibold rounded border text-center ${inputSm} ${!day.isWorkday ? 'opacity-30' : ''}`}
+                                                        value={day.isWorkday ? (km || '') : ''}
+                                                        placeholder={day.isWorkday ? '0' : '—'}
+                                                        onChange={e => setDayKm(dateKey, e.target.value)}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Строка 2: Одометр · Остаток · Расход (для рабочих дней) */}
+                                            {day.isWorkday && (
+                                                <div className={`flex items-center justify-between gap-2 pt-1.5 mt-1.5 border-t border-current/15 text-xs font-medium ${t('text-gray-300', 'text-gray-700', 'text-pink-900', 'text-sky-200', 'text-emerald-900', 'text-[#E6D5CC]', 'text-gray-700')}`}>
+                                                    <span>
+                                                        Одометр: <strong className="font-mono">{day.odometerEnd.toFixed(0)}</strong>
+                                                    </span>
+                                                    <span>
+                                                        Остаток: <strong className={`font-mono ${day.fuelEnd < 0 ? 'text-red-400 font-bold' : ''}`}>
+                                                            {formatFuel(day.fuelEnd)} л
+                                                        </strong>
+                                                    </span>
+                                                    <span>
+                                                        Расход: <strong className="font-mono">{km > 0 ? formatFuel(fuelSpent) : '—'} л</strong>
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+
                                         {/* Раскрытая детальная цепочка маршрута дня */}
                                         {expandedDayKey === dateKey && day.isWorkday && (
-                                            <div className={`p-3 border-t text-xs space-y-2 animate-fade-in ${t(
-                                                'bg-[#282B30] border-gray-700 text-white',
-                                                'bg-amber-50/70 border-amber-200 text-gray-900',
-                                                'bg-pink-50/70 border-pink-200 text-pink-900',
-                                                'bg-blue-50/70 border-blue-200 text-blue-900',
-                                                'bg-emerald-50/70 border-emerald-200 text-emerald-900',
-                                                'bg-[#EFEBE9] border-[#D7CCC8] text-[#3E2723]',
-                                                'bg-red-50/70 border-red-200 text-gray-900'
-                                            )}`}>
+                                            <div className={`p-3 border-t text-xs space-y-2 animate-fade-in ${
+                                                theme === 'newyear'
+                                                    ? 'bg-[#132A1F] border-[#FBBF24]/30 text-amber-50'
+                                                    : t(
+                                                        'bg-[#282B30] border-gray-700 text-white',
+                                                        'bg-amber-50/80 border-amber-200 text-gray-900',
+                                                        'bg-pink-50/80 border-pink-200 text-pink-900',
+                                                        'bg-[#162238] border-sky-500/30 text-sky-50',
+                                                        'bg-emerald-50/80 border-emerald-200 text-emerald-900',
+                                                        'bg-[#2A1F1B] border-[#6D4C41]/40 text-[#F5EBE6]',
+                                                        'bg-red-50/80 border-red-200 text-gray-900'
+                                                    )
+                                            }`}>
                                                 {/* Шапка раскрытого дня */}
                                                 <div className="flex flex-wrap items-center justify-between pb-1.5 border-b border-current/10 gap-2">
                                                     <div className="flex items-center gap-2 min-w-0">
                                                         <span className="font-bold truncate">Цепочка маршрута: {d} {MONTH_NAMES_GEN[month]}</span>
-                                                        <span className="text-[10px] opacity-60 flex-shrink-0">({tripCount} промежуточных точек)</span>
+                                                        <span className={`text-xs sm:text-sm font-semibold flex-shrink-0 ${t('text-gray-300', 'text-gray-600', 'text-pink-700', 'text-sky-300', 'text-emerald-700', 'text-[#D7B399]', 'text-gray-600')}`}>
+                                                            ({tripCount} промежуточных точек)
+                                                        </span>
                                                     </div>
                                                     <div className="flex items-center gap-1.5 flex-shrink-0">
                                                         <button
                                                             type="button"
                                                             onClick={() => clearSingleDay(dateKey)}
-                                                            className={`px-2 py-1 rounded text-[11px] font-bold flex items-center gap-1 border transition-all ${btnDangerOutline}`}
+                                                            className={`px-2 py-1 rounded text-xs font-bold flex items-center gap-1 border transition-all ${btnDangerOutline}`}
                                                             title="Сбросить километраж и точки маршрута этого дня"
                                                         >
                                                             <IconTrash size={12} />
@@ -2723,7 +2851,7 @@
                                                         <button
                                                             type="button"
                                                             onClick={() => addDayTrip(dateKey)}
-                                                            className={`px-2.5 py-1 rounded text-[11px] font-bold flex items-center gap-1 ${btnPrimary}`}
+                                                            className={`px-2.5 py-1 rounded text-xs font-bold flex items-center gap-1 ${btnPrimary}`}
                                                         >
                                                             <IconPlus size={12} /> Добавить точку
                                                         </button>
@@ -2862,7 +2990,7 @@
                     {/* ── Кнопка «Скачать отчёт» ── */}
                     <button
                         onClick={() => onExportExcel && onExportExcel()}
-                        className="w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold bg-green-600 hover:bg-green-700 active:bg-green-800 text-white transition-colors"
+                        className={`w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold shadow-md transition-colors ${btnExportExcel}`}
                         title="Скачать отчёт в формате .xlsx"
                     >
                         <IconDownload size={18} />
@@ -2982,6 +3110,24 @@
                 'bg-emerald-600 text-white hover:bg-emerald-700',
                 'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
                 'bg-[#C62828] text-white hover:bg-[#B71C1C]'
+            );
+            const btnStepAction = t(
+                'bg-[#FFB300] text-black hover:bg-[#FFA000]',
+                'bg-amber-600 text-white hover:bg-amber-700',
+                'bg-pink-500 text-white hover:bg-pink-600',
+                'bg-blue-600 text-white hover:bg-blue-700',
+                'bg-teal-100 hover:bg-teal-200 text-teal-900 border border-teal-300',
+                'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
+                'bg-[#C62828] text-white hover:bg-[#B71C1C]'
+            );
+            const btnExportExcel = t(
+                'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white',
+                'bg-green-600 hover:bg-green-700 text-white',
+                'bg-pink-600 hover:bg-pink-700 text-white',
+                'bg-blue-600 hover:bg-blue-700 text-white',
+                'bg-teal-800 hover:bg-teal-900 text-white shadow-md border border-teal-600',
+                'bg-[#5D4037] hover:bg-[#4E342E] text-white',
+                'bg-[#C62828] hover:bg-[#B71C1C] text-white'
             );
             const btnSecondary = t(
                 'bg-[#282B30] text-gray-300 hover:bg-[#32363C] border border-gray-700',
@@ -4451,7 +4597,7 @@
                             <button
                                 type="button"
                                 onClick={generateDistribution}
-                                className={`w-full min-h-[44px] flex items-center justify-center gap-2 rounded text-sm font-bold ${btnPrimary}`}
+                                className={`w-full min-h-[44px] flex items-center justify-center gap-2 rounded text-sm font-bold ${btnStepAction}`}
                             >
                                 <IconRefresh size={16} />
                                 {distributionMap ? 'Пересчитать разброс 🎲' : 'Раскидать пробег по выбранным дням'}
@@ -4560,7 +4706,7 @@
                             type="button"
                             onClick={handleGenerateRoutes}
                             disabled={isGeneratingRoutes}
-                            className={`w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold shadow-md transition-transform active:scale-[0.99] ${btnPrimary}`}
+                            className={`w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold shadow-md transition-transform active:scale-[0.99] ${btnStepAction}`}
                         >
                             <IconMapPin size={18} />
                             {isGeneratingRoutes ? (generationProgress || 'Подбираем маршруты-петли...') : '🗺 Подобрать маршруты-петли для рабочих дней'}
@@ -4724,7 +4870,7 @@
                     <div className="pt-2">
                         <button
                             onClick={() => onExportExcel && onExportExcel()}
-                            className="w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold bg-green-600 hover:bg-green-700 active:bg-green-800 text-white transition-colors"
+                            className={`w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold shadow-md transition-all ${btnExportExcel}`}
                         >
                             <IconDownload size={18} />
                             Сформировать и скачать отчёт (.xlsx)
@@ -4810,6 +4956,24 @@
                 'bg-emerald-600 text-white hover:bg-emerald-700',
                 'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
                 'bg-[#C62828] text-white hover:bg-[#B71C1C]'
+            );
+            const btnStepAction = t(
+                'bg-[#FFB300] text-black hover:bg-[#FFA000]',
+                'bg-amber-600 text-white hover:bg-amber-700',
+                'bg-pink-500 text-white hover:bg-pink-600',
+                'bg-blue-600 text-white hover:bg-blue-700',
+                'bg-teal-100 hover:bg-teal-200 text-teal-900 border border-teal-300',
+                'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
+                'bg-[#C62828] text-white hover:bg-[#B71C1C]'
+            );
+            const btnExportExcel = t(
+                'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white',
+                'bg-green-600 hover:bg-green-700 text-white',
+                'bg-pink-600 hover:bg-pink-700 text-white',
+                'bg-blue-600 hover:bg-blue-700 text-white',
+                'bg-teal-800 hover:bg-teal-900 text-white shadow-md border border-teal-600',
+                'bg-[#5D4037] hover:bg-[#4E342E] text-white',
+                'bg-[#C62828] hover:bg-[#B71C1C] text-white'
             );
 
             const displayError = errorMsg || localError;
@@ -4945,6 +5109,24 @@
                 'bg-emerald-600 text-white hover:bg-emerald-700',
                 'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
                 'bg-[#C62828] text-white hover:bg-[#B71C1C]'
+            );
+            const btnStepAction = t(
+                'bg-[#FFB300] text-black hover:bg-[#FFA000]',
+                'bg-amber-600 text-white hover:bg-amber-700',
+                'bg-pink-500 text-white hover:bg-pink-600',
+                'bg-blue-600 text-white hover:bg-blue-700',
+                'bg-teal-100 hover:bg-teal-200 text-teal-900 border border-teal-300',
+                'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
+                'bg-[#C62828] text-white hover:bg-[#B71C1C]'
+            );
+            const btnExportExcel = t(
+                'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white',
+                'bg-green-600 hover:bg-green-700 text-white',
+                'bg-pink-600 hover:bg-pink-700 text-white',
+                'bg-blue-600 hover:bg-blue-700 text-white',
+                'bg-teal-800 hover:bg-teal-900 text-white shadow-md border border-teal-600',
+                'bg-[#5D4037] hover:bg-[#4E342E] text-white',
+                'bg-[#C62828] hover:bg-[#B71C1C] text-white'
             );
             const rowClass = t(
                 'bg-[#1E2125] border-gray-700',
@@ -5106,6 +5288,27 @@
             /* ── Тема ── */
             const [theme, setTheme] = useState(initTheme);
 
+            /* ── Живое время и дата для фирменной шапки (как в «Маршрутах») ── */
+            const [now, setNow] = useState(() => new Date());
+            useEffect(() => {
+                const timer = setInterval(() => setNow(new Date()), 1000);
+                return () => clearInterval(timer);
+            }, []);
+
+            const formatDate = (date) => {
+                const d = String(date.getDate()).padStart(2, '0');
+                const m = String(date.getMonth() + 1).padStart(2, '0');
+                const y = date.getFullYear();
+                return `${d}.${m}.${y}`;
+            };
+
+            const formatTime = (date) => {
+                const h = String(date.getHours()).padStart(2, '0');
+                const min = String(date.getMinutes()).padStart(2, '0');
+                const s = String(date.getSeconds()).padStart(2, '0');
+                return `${h}:${min}:${s}`;
+            };
+
             /* ── Идентификатор эксперта (телефон / ПИН-код) ── */
             const [userPhone, setUserPhone] = useState(() => {
                 return normalizePhone(localStorage.getItem('expert_app_user_phone') || '');
@@ -5197,25 +5400,166 @@
             const [isExporting, setIsExporting] = useState(false);
 
             /* ── Текущий месяц по умолчанию — сегодня ── */
-            const now = new Date();
             const defaultKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2,'0')}`;
             const [currentMonthKey, setCurrentMonthKey] = useState(defaultKey);
+
+            /* ── Открытые вкладки месяцев ── */
+            const [openMonthKeys, setOpenMonthKeys] = useState(() => {
+                const set = new Set();
+                set.add(defaultKey);
+                try {
+                    const savedTabs = JSON.parse(localStorage.getItem('expert_report_open_tabs') || '[]');
+                    if (Array.isArray(savedTabs)) {
+                        savedTabs.forEach(k => { if (/^\d{4}-\d{2}$/.test(k)) set.add(k); });
+                    }
+                } catch {}
+                try {
+                    const savedMonths = JSON.parse(localStorage.getItem('expert_report_months') || '{}');
+                    Object.entries(savedMonths).forEach(([k, m]) => {
+                        if (!/^\d{4}-\d{2}$/.test(k)) return;
+                        const hasOdo = Number(m?.odometerStart) > 0;
+                        const hasRefuels = Array.isArray(m?.refuels) && m.refuels.length > 0;
+                        const hasWorkdays = m?.workdays && Object.values(m.workdays).some(d => d && (d.isWorkday || (d.trips && d.trips.length > 0) || Number(d.tripKm) > 0));
+                        if (hasOdo || hasRefuels || hasWorkdays) {
+                            set.add(k);
+                        }
+                    });
+                } catch {}
+                return Array.from(set).sort();
+            });
+
+            useEffect(() => {
+                try {
+                    localStorage.setItem('expert_report_open_tabs', JSON.stringify(openMonthKeys));
+                } catch {}
+            }, [openMonthKeys]);
+
+            /* ── Модальное окно выбора месяца (+) ── */
+            const [showMonthPickerModal, setShowMonthPickerModal] = useState(false);
+            const [pickerYear, setPickerYear] = useState(now.getFullYear());
+            const tabsScrollRef = useRef(null);
+
+            const monthHasData = (yearNum, monthNum) => {
+                const k = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
+                const m = months[k];
+                if (!m) return false;
+                const hasOdo = Number(m.odometerStart) > 0;
+                const hasRefuels = Array.isArray(m.refuels) && m.refuels.length > 0;
+                const hasWorkdays = m.workdays && Object.values(m.workdays).some(d => d && (d.isWorkday || (d.trips && d.trips.length > 0) || Number(d.tripKm) > 0));
+                return Boolean(hasOdo || hasRefuels || hasWorkdays);
+            };
+
+            /* ── Закрытие вкладки месяца ── */
+            const handleCloseMonthTab = (keyToClose, e) => {
+                if (e) e.stopPropagation();
+                if (openMonthKeys.length <= 1) return;
+
+                const idx = openMonthKeys.indexOf(keyToClose);
+                const nextKeys = openMonthKeys.filter(k => k !== keyToClose);
+                setOpenMonthKeys(nextKeys);
+
+                if (currentMonthKey === keyToClose) {
+                    const nextIdx = Math.max(0, idx - 1);
+                    const newCurrent = nextKeys[nextIdx] || nextKeys[0];
+                    if (newCurrent) {
+                        setCurrentMonthKey(newCurrent);
+                    }
+                }
+            };
+
+            /* ── Открытие нового месяца по клику на месяц в модалке ── */
+            const handleOpenMonth = (y, m) => {
+                const newKey = `${y}-${String(m).padStart(2, '0')}`;
+                setOpenMonthKeys(prev => {
+                    if (prev.includes(newKey)) return prev;
+                    return [...prev, newKey].sort();
+                });
+                if (!months[newKey]) {
+                    applyPrevMonthBalances(y, m, false);
+                }
+                setCurrentMonthKey(newKey);
+                setOfficialTab('month');
+                setShowMonthPickerModal(false);
+            };
 
             /* ── Модалки ── */
             const [showSettings, setShowSettings] = useState(false);
 
-            /* ── Скрытый режим (5 кликов по заголовку) ── */
+            /* ── Скрытый продвинутый режим (активация по 7 быстрым кликам по заголовку «Автоотчёт») ── */
+            const [isProUnlocked, setIsProUnlocked] = useState(false);
+            const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+            const audioRef = useRef(null);
+
             const titleClicksRef = useRef(0);
             const titleTimerRef  = useRef(null);
+
             const handleTitleClick = () => {
-                if (!HIDE_UNOFFICIAL_MODE) return;
                 titleClicksRef.current++;
                 if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
-                titleTimerRef.current = setTimeout(() => { titleClicksRef.current = 0; }, 2000);
-                if (titleClicksRef.current >= 5) {
+                titleTimerRef.current = setTimeout(() => {
                     titleClicksRef.current = 0;
-                    setMode(m => m === 'autoselect' ? 'official' : 'autoselect');
+                }, 2200);
+
+                if (titleClicksRef.current >= 7) {
+                    titleClicksRef.current = 0;
+                    setIsProUnlocked(true);
+                    setMode('autoselect');
+
+                    // Запуск музыки fg.mp3
+                    try {
+                        if (!audioRef.current) {
+                            const a = new Audio('fg.mp3');
+                            a.loop = true;
+                            a.volume = 0.35;
+                            audioRef.current = a;
+                        }
+                        audioRef.current.currentTime = 0;
+                        const playPromise = audioRef.current.play();
+                        if (playPromise !== undefined) {
+                            playPromise
+                                .then(() => setIsPlayingAudio(true))
+                                .catch(e => console.log('Аудио заблокировано браузером до прямого клика:', e));
+                        }
+                    } catch (e) {
+                        console.log('Ошибка запуска аудио:', e);
+                    }
                 }
+            };
+
+            /* ── Переключение звука фоновой музыки ── */
+            const toggleAudio = () => {
+                try {
+                    if (!audioRef.current) {
+                        const a = new Audio('fg.mp3');
+                        a.loop = true;
+                        a.volume = 0.35;
+                        audioRef.current = a;
+                    }
+                    if (isPlayingAudio) {
+                        audioRef.current.pause();
+                        setIsPlayingAudio(false);
+                    } else {
+                        const playPromise = audioRef.current.play();
+                        if (playPromise !== undefined) {
+                            playPromise
+                                .then(() => setIsPlayingAudio(true))
+                                .catch(e => console.log('Ошибка воспроизведения:', e));
+                        }
+                    }
+                } catch (e) {
+                    console.log('Ошибка переключения звука:', e);
+                }
+            };
+
+            /* ── Блокировка и скрытие продвинутого режима ── */
+            const handleLockPro = () => {
+                setIsProUnlocked(false);
+                setMode('official');
+                if (audioRef.current) {
+                    audioRef.current.pause();
+                    audioRef.current.currentTime = 0;
+                }
+                setIsPlayingAudio(false);
             };
 
             /* ── Обеспечиваем наличие записи для текущего месяца ── */
@@ -5328,6 +5672,17 @@
                     }
                     if (loadedMonths && typeof loadedMonths === 'object') {
                         setMonths(prev => ({ ...prev, ...loadedMonths }));
+                        setOpenMonthKeys(prevKeys => {
+                            const set = new Set(prevKeys);
+                            Object.entries(loadedMonths).forEach(([k, m]) => {
+                                if (!/^\d{4}-\d{2}$/.test(k)) return;
+                                const hasOdo = Number(m?.odometerStart) > 0;
+                                const hasRefuels = Array.isArray(m?.refuels) && m.refuels.length > 0;
+                                const hasWorkdays = m?.workdays && Object.values(m.workdays).some(d => d && (d.isWorkday || (d.trips && d.trips.length > 0) || Number(d.tripKm) > 0));
+                                if (hasOdo || hasRefuels || hasWorkdays) set.add(k);
+                            });
+                            return Array.from(set).sort();
+                        });
                     }
                     if (loadedAddresses && Array.isArray(loadedAddresses)) {
                         setAddresses(ensureDefaultOfficeAddress(loadedAddresses, (loadedProfile || profile)?.startPoint));
@@ -6079,6 +6434,20 @@
                 'bg-white border-gray-200'
             );
 
+            /* Фирменные градиенты шапки из themes_ref.html для всех 9 тем */
+            const headerGradient = theme === 'newyear'
+                ? 'bg-gradient-to-r from-[#0F291E] via-[#7F1D1D] to-[#0F291E] border-[#FBBF24]/60'
+                : (theme === 'expert' || theme === 'expert-dark')
+                    ? 'bg-gradient-to-r from-[#4A0B11] via-[#75161F] to-[#4A0B11] border-[#C62828]/50'
+                    : t(
+                        'bg-gradient-to-r from-[#1A1D21] via-[#282B30] to-[#1A1D21] border-[#FFB300]/50',
+                        'bg-gradient-to-r from-amber-700 via-amber-600 to-amber-700 border-amber-800',
+                        'bg-gradient-to-r from-pink-700 via-pink-600 to-pink-700 border-pink-800',
+                        'bg-gradient-to-r from-[#0F2547] via-[#1D4ED8] to-[#0F2547] border-blue-400/30',
+                        'bg-gradient-to-r from-emerald-800 via-emerald-600 to-emerald-800 border-emerald-900',
+                        'bg-gradient-to-r from-[#3E2723] via-[#5D4037] to-[#3E2723] border-[#8D6E63]/40'
+                    );
+
             const accentClass = t(
                 'text-[#FFB300]','text-amber-800','text-pink-600',
                 'text-blue-600','text-emerald-700','text-[#5D4037]','text-[#9A1B24]'
@@ -6113,6 +6482,24 @@
                 'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
                 'bg-[#C62828] text-white hover:bg-[#B71C1C]'
             );
+            const btnStepAction = t(
+                'bg-[#FFB300] text-black hover:bg-[#FFA000]',
+                'bg-amber-600 text-white hover:bg-amber-700',
+                'bg-pink-500 text-white hover:bg-pink-600',
+                'bg-blue-600 text-white hover:bg-blue-700',
+                'bg-teal-100 hover:bg-teal-200 text-teal-900 border border-teal-300',
+                'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
+                'bg-[#C62828] text-white hover:bg-[#B71C1C]'
+            );
+            const btnExportExcel = t(
+                'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white',
+                'bg-green-600 hover:bg-green-700 text-white',
+                'bg-pink-600 hover:bg-pink-700 text-white',
+                'bg-blue-600 hover:bg-blue-700 text-white',
+                'bg-teal-800 hover:bg-teal-900 text-white shadow-md border border-teal-600',
+                'bg-[#5D4037] hover:bg-[#4E342E] text-white',
+                'bg-[#C62828] hover:bg-[#B71C1C] text-white'
+            );
 
             const modeSwitchBase = 'flex rounded-full border overflow-hidden text-xs font-bold ' + t(
                 'border-[#FFB300]/40','border-amber-400','border-pink-400',
@@ -6120,115 +6507,249 @@
             );
 
             return (
-                <div className={`w-full h-full flex flex-col ${appBg}`}>
+                <div className={`w-full h-full flex flex-col overflow-y-auto hide-scrollbar ${appBg}`}>
 
                     {/* Снегопад */}
                     {theme === 'newyear' && <SnowEffect />}
 
-                    {/* ══ ШАПКА ══ */}
-                    <header className={`flex-shrink-0 border-b shadow-sm z-10 ${headerBg}`}>
-                        <div className="max-w-4xl mx-auto w-full px-4 py-3 flex items-center justify-between">
-                            {/* Заголовок — выровнен по левому краю */}
-                            <h1
-                                className={`text-lg font-black tracking-tight select-none ${accentClass}`}
-                                onClick={handleTitleClick}
-                                style={{ cursor: HIDE_UNOFFICIAL_MODE ? 'default' : 'default' }}
-                            >
-                                Автоотчет
-                            </h1>
+                    {/* Единый центрированный контейнер приложения в стиле «Маршруты» */}
+                    <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 py-2 sm:py-5 space-y-3 flex-1 flex flex-col overflow-x-hidden">
 
-                            {/* Переключатель режимов */}
-                            {!HIDE_UNOFFICIAL_MODE && (
-                                <div className={modeSwitchBase}>
-                                    <button
-                                        onClick={() => setMode('official')}
-                                        className={`px-3 py-1.5 min-h-[36px] transition-colors ${mode === 'official' ? tabActive : tabInactive}`}
+                        {/* ══ ШАПКА (скруглённая карточка с фирменным градиентом) ══ */}
+                        <header className={`rounded-2xl border shadow-lg p-4 sm:px-5 sm:py-4 shrink-0 transition-all text-white ${headerGradient}`}>
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                {/* Заголовок + живое время */}
+                                <div>
+                                    <h1
+                                        className="text-xl sm:text-2xl font-black text-white tracking-wide select-none"
+                                        onClick={handleTitleClick}
+                                        style={{ cursor: 'default' }}
                                     >
-                                        Официальный
-                                    </button>
-                                    <button
-                                        onClick={() => setMode('autoselect')}
-                                        className={`px-3 py-1.5 min-h-[36px] transition-colors ${mode === 'autoselect' ? tabActive : tabInactive}`}
-                                    >
-                                        Автоподбор
-                                    </button>
-                                </div>
-                            )}
-
-                            <div className="flex items-center">
-                                {/* Индикатор облачной синхронизации */}
-                                <div className="flex items-center gap-1.5 mr-2">
-                                    {cloudStatus === 'syncing' && (
-                                        <span className="flex items-center gap-1 text-xs font-bold text-amber-500 animate-pulse" title="Синхронизация с Google Таблицей">
-                                            <IconCloudSync size={16} />
-                                            <span className="hidden sm:inline">Сохранение...</span>
-                                        </span>
-                                    )}
-                                    {cloudStatus === 'saved' && (
-                                        <span className="flex items-center gap-1 text-xs font-bold text-green-500" title="Данные синхронизированы с Google Таблицей">
-                                            <IconCloudCheck size={16} />
-                                            <span className="hidden sm:inline">Облако ✓</span>
-                                        </span>
-                                    )}
-                                    {cloudStatus === 'error' && (
-                                        <span className="flex items-center gap-1 text-xs font-bold text-red-500 cursor-pointer" title={cloudErrorMsg || 'Ошибка облака'} onClick={() => alert(cloudErrorMsg || 'Ошибка синхронизации')}>
-                                            <IconAlertTriangle size={16} />
-                                            <span className="hidden sm:inline">Ошибка облака</span>
-                                        </span>
-                                    )}
-                                    {cloudStatus === 'idle' && (
-                                        <span className="flex items-center gap-1 text-xs font-bold opacity-40" title={userPhone ? `Эксперт: ${userPhone}` : 'Вход не выполнен'}>
-                                            <IconCloud size={16} />
-                                            <span className="hidden sm:inline">{userPhone ? 'Облако' : 'Офлайн'}</span>
-                                        </span>
-                                    )}
+                                        Автоотчет
+                                    </h1>
+                                    <div className="text-xs sm:text-sm mt-1 font-mono flex items-center gap-1.5 text-white/90">
+                                        <span>{formatDate(now)}</span>
+                                        <span className="opacity-50 mx-1.5">|</span>
+                                        <span className="font-semibold text-white">{formatTime(now)}</span>
+                                    </div>
                                 </div>
 
-                                {/* Кнопка настроек */}
-                                <button
-                                    onClick={() => setShowSettings(true)}
-                                    className={`min-h-[48px] min-w-[48px] flex items-center justify-center rounded-lg transition-opacity hover:opacity-80 ${accentClass}`}
-                                    aria-label="Настройки"
-                                >
-                                    <IconSettings size={22} />
-                                </button>
-                            </div>
-                        </div>
-                    </header>
+                                {/* Правая часть: режимы, звук, облако, настройки */}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    {/* Переключатель режимов (отображается только при активации через 7 кликов) */}
+                                    {isProUnlocked && (
+                                        <div className="flex items-center rounded-xl overflow-hidden text-xs font-bold border border-white/20 bg-white/10 p-0.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => setMode('official')}
+                                                className={`px-3 py-1.5 min-h-[34px] rounded-lg transition-all ${
+                                                    mode === 'official'
+                                                        ? 'bg-white/30 text-white shadow-sm font-black'
+                                                        : 'text-white/70 hover:text-white'
+                                                }`}
+                                            >
+                                                Классический
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setMode('autoselect')}
+                                                className={`px-3 py-1.5 min-h-[34px] rounded-lg transition-all ${
+                                                    mode === 'autoselect'
+                                                        ? 'bg-white/30 text-white shadow-sm font-black'
+                                                        : 'text-white/70 hover:text-white'
+                                                }`}
+                                            >
+                                                Продвинутый
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleLockPro}
+                                                className="px-2 py-1.5 min-h-[34px] text-white/60 hover:text-red-300 transition-opacity flex items-center justify-center border-l border-white/20 ml-0.5"
+                                                title="Скрыть продвинутый режим"
+                                                aria-label="Скрыть продвинутый режим"
+                                            >
+                                                <IconLock size={14} />
+                                            </button>
+                                        </div>
+                                    )}
 
-                    {/* ══ ВКЛАДКИ (только в официальном режиме) ══ */}
-                    {mode === 'official' && (
-                        <div className={`flex-shrink-0 border-b ${t('border-[#3A3D42] bg-[#1A1D21]','border-gray-200 bg-white','border-pink-200 bg-white','border-blue-200 bg-white','border-emerald-200 bg-white','border-[#D7CCC8] bg-[#FDFBF7]','border-gray-200 bg-white')}`}>
-                            <div className="max-w-4xl mx-auto w-full px-4 flex">
-                                <button
-                                    onClick={() => setOfficialTab('profile')}
-                                    className={`flex-1 flex items-center justify-center gap-2 py-3 min-h-[48px] text-sm font-bold border-b-2 transition-colors ${
-                                        officialTab === 'profile'
-                                            ? `border-current ${accentClass}`
-                                            : `border-transparent ${tabInactive}`
-                                    }`}
-                                >
-                                    <IconUser size={16} />
-                                    Карточка
-                                </button>
-                                <button
-                                    onClick={() => setOfficialTab('month')}
-                                    className={`flex-1 flex items-center justify-center gap-2 py-3 min-h-[48px] text-sm font-bold border-b-2 transition-colors ${
-                                        officialTab === 'month'
-                                            ? `border-current ${accentClass}`
-                                            : `border-transparent ${tabInactive}`
-                                    }`}
-                                >
-                                    <IconCalendar size={16} />
-                                    {MONTH_NAMES[currentMonthData.month]} {currentMonthData.year}
-                                </button>
-                            </div>
-                        </div>
-                    )}
+                                    {/* Кнопка управления фоновой музыкой fg.mp3 */}
+                                    {isProUnlocked && (
+                                        <button
+                                            type="button"
+                                            onClick={toggleAudio}
+                                            className={`min-h-[40px] min-w-[40px] px-2.5 py-1.5 rounded-xl border border-white/20 flex items-center justify-center transition-all ${
+                                                isPlayingAudio
+                                                    ? 'bg-white/30 text-white shadow-sm'
+                                                    : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
+                                            }`}
+                                            title={isPlayingAudio ? 'Выключить фоновую музыку' : 'Включить фоновую музыку'}
+                                            aria-label="Фоновая музыка"
+                                        >
+                                            {isPlayingAudio ? (
+                                                <IconVolume size={18} className="animate-pulse" />
+                                            ) : (
+                                                <IconVolumeX size={18} />
+                                            )}
+                                        </button>
+                                    )}
 
-                    {/* ══ КОНТЕНТ ══ */}
-                    <main className="flex-1 overflow-y-auto hide-scrollbar">
-                        <div className="max-w-4xl mx-auto w-full px-4 py-4">
+                                    {/* Индикатор облачной синхронизации */}
+                                    <div className="flex items-center px-2.5 py-1.5 rounded-xl border border-white/20 bg-white/10 text-white text-xs font-semibold">
+                                        {cloudStatus === 'syncing' && (
+                                            <span className="flex items-center gap-1.5 text-amber-300 animate-pulse font-bold" title="Синхронизация с Google Таблицей">
+                                                <IconCloudSync size={16} />
+                                                <span className="hidden sm:inline">Сохранение...</span>
+                                            </span>
+                                        )}
+                                        {cloudStatus === 'saved' && (
+                                            <span className="flex items-center gap-1.5 text-emerald-300 font-bold" title="Данные синхронизированы с Google Таблицей">
+                                                <IconCloudCheck size={16} />
+                                                <span className="hidden sm:inline">Облако ✓</span>
+                                            </span>
+                                        )}
+                                        {cloudStatus === 'error' && (
+                                            <span className="flex items-center gap-1.5 text-rose-300 font-bold cursor-pointer" title={cloudErrorMsg || 'Ошибка облака'} onClick={() => alert(cloudErrorMsg || 'Ошибка синхронизации')}>
+                                                <IconAlertTriangle size={16} />
+                                                <span className="hidden sm:inline">Ошибка</span>
+                                            </span>
+                                        )}
+                                        {cloudStatus === 'idle' && (
+                                            <span className="flex items-center gap-1.5 text-white/70 font-medium" title={userPhone ? `Эксперт: ${userPhone}` : 'Вход не выполнен'}>
+                                                <IconCloud size={16} />
+                                                <span className="hidden sm:inline">{userPhone ? 'Облако' : 'Офлайн'}</span>
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Кнопка настроек */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowSettings(true)}
+                                        className="min-h-[40px] min-w-[40px] p-2 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 active:bg-white/30 text-white flex items-center justify-center transition-all shadow-sm"
+                                        aria-label="Настройки"
+                                        title="Настройки"
+                                    >
+                                        <IconSettings size={20} />
+                                    </button>
+                                </div>
+                            </div>
+                        </header>
+
+                        {/* ══ ВЕРХНЯЯ НАВИГАЦИЯ (Карточка + Лента вкладок месяцев с кнопками прокрутки и +) ══ */}
+                        {mode === 'official' && (
+                            <div className={`rounded-2xl border shadow-sm p-2 shrink-0 transition-colors ${headerBg} ${t('border-[#3A3D42]','border-gray-200','border-pink-200','border-blue-200','border-emerald-200','border-[#D7CCC8]','border-gray-200')}`}>
+                                <div className="flex items-center gap-1.5 w-full">
+                                    {/* Компактная кнопка «Карточка» слева */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setOfficialTab('profile')}
+                                        className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                                            officialTab === 'profile'
+                                                ? `${tabActive} shadow-sm font-bold`
+                                                : `${t('bg-black/20 text-gray-400 hover:text-white hover:bg-black/30', 'bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200', 'bg-pink-50 text-pink-700 hover:bg-pink-100', 'bg-blue-50 text-blue-700 hover:bg-blue-100', 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100', 'bg-[#EFEBE9] text-[#5D4037] hover:bg-[#D7CCC8]', 'bg-gray-100 text-gray-700 hover:bg-gray-200')}`
+                                        }`}
+                                        title="Карточка сотрудника"
+                                    >
+                                        <IconUser size={14} />
+                                        <span>Карточка</span>
+                                    </button>
+
+                                    {/* Тонкий вертикальный разделитель */}
+                                    <div className={`h-5 w-[1px] shrink-0 mx-0.5 ${t('bg-white/10', 'bg-gray-300', 'bg-pink-200', 'bg-blue-200', 'bg-emerald-200', 'bg-[#D7CCC8]', 'bg-gray-300')}`} />
+
+                                    {/* Кнопка прокрутки влево ◀ */}
+                                    <button
+                                        type="button"
+                                        onClick={() => tabsScrollRef.current?.scrollBy({ left: -180, behavior: 'smooth' })}
+                                        className={`shrink-0 w-7 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
+                                            t('bg-black/20 text-gray-400 hover:text-white hover:bg-black/30', 'bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200', 'bg-pink-50 text-pink-700 hover:bg-pink-100', 'bg-blue-50 text-blue-700 hover:bg-blue-100', 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100', 'bg-[#EFEBE9] text-[#5D4037] hover:bg-[#D7CCC8]', 'bg-gray-100 text-gray-700 hover:bg-gray-200')
+                                        }`}
+                                        title="Прокрутить вкладки влево"
+                                        aria-label="Прокрутить вкладки влево"
+                                    >
+                                        ◀
+                                    </button>
+
+                                    {/* Прокручиваемая лента вкладок месяцев */}
+                                    <div
+                                        ref={tabsScrollRef}
+                                        className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1 min-w-0 scroll-smooth py-0.5"
+                                    >
+                                        {openMonthKeys.map(k => {
+                                            const [yStr, mStr] = k.split('-');
+                                            const y = Number(yStr);
+                                            const m = Number(mStr);
+                                            const monthLabel = `${MONTH_NAMES[m] || mStr} ${y}`;
+                                            const isActive = officialTab === 'month' && currentMonthKey === k;
+
+                                            return (
+                                                <div
+                                                    key={k}
+                                                    onClick={() => {
+                                                        setCurrentMonthKey(k);
+                                                        setOfficialTab('month');
+                                                    }}
+                                                    className={`group shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg cursor-pointer whitespace-nowrap transition-all select-none ${
+                                                        isActive
+                                                            ? `${tabActive} shadow-sm font-bold`
+                                                            : `${t('bg-black/20 text-gray-400 hover:text-white hover:bg-black/30', 'bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200', 'bg-pink-50 text-pink-700 hover:bg-pink-100', 'bg-blue-50 text-blue-700 hover:bg-blue-100', 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100', 'bg-[#EFEBE9] text-[#5D4037] hover:bg-[#D7CCC8]', 'bg-gray-100 text-gray-700 hover:bg-gray-200')}`
+                                                    }`}
+                                                >
+                                                    <IconCalendar size={13} className={isActive ? '' : 'opacity-60'} />
+                                                    <span>{monthLabel}</span>
+                                                    {openMonthKeys.length > 1 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => handleCloseMonthTab(k, e)}
+                                                            className="ml-1 p-0.5 rounded hover:bg-black/20 hover:text-red-300 opacity-60 hover:opacity-100 transition-opacity leading-none"
+                                                            title="Скрыть вкладку"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Кнопка прокрутки вправо ▶ */}
+                                    <button
+                                        type="button"
+                                        onClick={() => tabsScrollRef.current?.scrollBy({ left: 180, behavior: 'smooth' })}
+                                        className={`shrink-0 w-7 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
+                                            t('bg-black/20 text-gray-400 hover:text-white hover:bg-black/30', 'bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200', 'bg-pink-50 text-pink-700 hover:bg-pink-100', 'bg-blue-50 text-blue-700 hover:bg-blue-100', 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100', 'bg-[#EFEBE9] text-[#5D4037] hover:bg-[#D7CCC8]', 'bg-gray-100 text-gray-700 hover:bg-gray-200')
+                                        }`}
+                                        title="Прокрутить вкладки вправо"
+                                        aria-label="Прокрутить вкладки вправо"
+                                    >
+                                        ▶
+                                    </button>
+
+                                    {/* Закреплённая справа кнопка «+» для вызова модального окна выбора месяца */}
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const [curY] = currentMonthKey.split('-');
+                                            setPickerYear(Number(curY) || now.getFullYear());
+                                            setShowMonthPickerModal(true);
+                                        }}
+                                        className={`shrink-0 w-7 h-8 flex items-center justify-center rounded-lg text-sm font-bold transition-all ${
+                                            showMonthPickerModal
+                                                ? btnPrimary
+                                                : `${t('bg-black/20 text-gray-400 hover:text-white hover:bg-black/30', 'bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200', 'bg-pink-50 text-pink-700 hover:bg-pink-100', 'bg-blue-50 text-blue-700 hover:bg-blue-100', 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100', 'bg-[#EFEBE9] text-[#5D4037] hover:bg-[#D7CCC8]', 'bg-gray-100 text-gray-700 hover:bg-gray-200')}`
+                                        }`}
+                                        title="Открыть другой месяц"
+                                        aria-label="Открыть другой месяц"
+                                    >
+                                        <IconPlus size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ══ КОНТЕНТ ══ */}
+                        <main className="flex-1 w-full">
                             {mode === 'official' && officialTab === 'profile' && (
                                 <ProfileCard
                                     profile={profile}
@@ -6249,7 +6770,11 @@
                                         userChangedMonthRef.current = true;
                                         setMonths(updater);
                                     }}
-                                    onChangeMonthKey={(newYear, newMonth) => setCurrentMonthKey(`${newYear}-${String(newMonth).padStart(2, '0')}`)}
+                                    onChangeMonthKey={(newYear, newMonth) => {
+                                        const k = `${newYear}-${String(newMonth).padStart(2, '0')}`;
+                                        setCurrentMonthKey(k);
+                                        setOpenMonthKeys(prev => prev.includes(k) ? prev : [...prev, k].sort());
+                                    }}
                                     onPullPrevMonth={(y, m) => applyPrevMonthBalances(y, m, true)}
                                     onSaveMonthCloud={() => saveMonthCloud(currentMonthData, currentMonthKey)}
                                     onLoadMonthCloud={() => loadMonthCloud(currentMonthKey)}
@@ -6257,6 +6782,7 @@
                                     onExportExcel={() => exportReportToExcel(profile, currentMonthData)}
                                     cloudStatus={cloudStatus}
                                     userPhone={userPhone}
+                                    theme={theme}
                                     t={t}
                                 />
                             )}
@@ -6280,8 +6806,8 @@
                                     t={t}
                                 />
                             )}
-                        </div>
-                    </main>
+                        </main>
+                    </div>
 
                     {/* ══ МОДАЛКА АВТОРИЗАЦИИ (ТЕЛЕФОН + ПИН) ══ */}
                     {!isAuthVerified && (
@@ -6307,6 +6833,105 @@
                             onClose={() => setShowSettings(false)}
                             t={t}
                         />
+                    )}
+
+                    {/* ══ МОДАЛКА ВЫБОРА МЕСЯЦА (+) ══ */}
+                    {showMonthPickerModal && (
+                        <div
+                            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-fade-in"
+                            onClick={(e) => {
+                                if (e.target === e.currentTarget) setShowMonthPickerModal(false);
+                            }}
+                        >
+                            <div
+                                className={`w-full max-w-sm rounded-2xl border shadow-2xl p-5 ${
+                                    t(
+                                        'bg-[#282B30] border-gray-700 text-white',
+                                        'bg-white border-gray-200 text-gray-900',
+                                        'bg-white border-pink-200 text-pink-900',
+                                        'bg-white border-blue-200 text-blue-900',
+                                        'bg-white border-emerald-200 text-emerald-900',
+                                        'bg-[#FDFBF7] border-[#D7CCC8] text-[#3E2723]',
+                                        'bg-white border-gray-200 text-gray-900'
+                                    )
+                                }`}
+                            >
+                                {/* Заголовок и закрытие */}
+                                <div className="flex items-center justify-between pb-3 border-b border-current/10 mb-4">
+                                    <h3 className="text-base font-bold tracking-tight">Открыть месяц</h3>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowMonthPickerModal(false)}
+                                        className="w-8 h-8 flex items-center justify-center rounded-lg opacity-60 hover:opacity-100 hover:bg-black/10 transition-all text-lg font-bold leading-none"
+                                        aria-label="Закрыть"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+
+                                {/* Переключатель года */}
+                                <div className="flex items-center justify-between px-2 mb-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setPickerYear(y => Math.max(2020, y - 1))}
+                                        className="w-9 h-9 flex items-center justify-center rounded-lg border border-current/20 hover:bg-black/10 font-bold transition-all"
+                                        title="Предыдущий год"
+                                    >
+                                        ◀
+                                    </button>
+                                    <div className="text-xl font-extrabold tracking-wide">
+                                        {pickerYear}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPickerYear(y => Math.min(2035, y + 1))}
+                                        className="w-9 h-9 flex items-center justify-center rounded-lg border border-current/20 hover:bg-black/10 font-bold transition-all"
+                                        title="Следующий год"
+                                    >
+                                        ▶
+                                    </button>
+                                </div>
+
+                                {/* Сетка 12 месяцев */}
+                                <div className="grid grid-cols-3 gap-2">
+                                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => {
+                                        const keyForM = `${pickerYear}-${String(m).padStart(2, '0')}`;
+                                        const isActive = currentMonthKey === keyForM && officialTab === 'month';
+                                        const hasData = monthHasData(pickerYear, m);
+                                        const monthName = MONTH_NAMES[m] || `${m}`;
+
+                                        return (
+                                            <button
+                                                key={m}
+                                                type="button"
+                                                onClick={() => handleOpenMonth(pickerYear, m)}
+                                                className={`relative py-3 px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex flex-col items-center justify-center gap-1 border ${
+                                                    isActive
+                                                        ? `${tabActive} border-transparent shadow-md font-bold`
+                                                        : `${t(
+                                                            'bg-[#1E2125] border-gray-700/80 text-gray-200 hover:bg-black/40 hover:border-gray-500',
+                                                            'bg-gray-50 border-gray-200 text-gray-800 hover:bg-gray-100 hover:border-gray-300',
+                                                            'bg-pink-50 border-pink-200 text-pink-900 hover:bg-pink-100',
+                                                            'bg-blue-50 border-blue-200 text-blue-900 hover:bg-blue-100',
+                                                            'bg-emerald-50 border-emerald-200 text-emerald-900 hover:bg-emerald-100',
+                                                            'bg-[#EFEBE9] border-[#D7CCC8] text-[#3E2723] hover:bg-[#D7CCC8]',
+                                                            'bg-gray-50 border-gray-200 text-gray-800 hover:bg-gray-100'
+                                                        )}`
+                                                }`}
+                                            >
+                                                <span className="truncate w-full text-center">{monthName}</span>
+                                                {hasData && (
+                                                    <span
+                                                        className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"
+                                                        title="Есть заполненные данные"
+                                                    />
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
                     )}
                 </div>
             );
