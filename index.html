@@ -701,14 +701,14 @@
                     .replace(/bg-gray-50/g, 'bg-white/55 backdrop-blur-md')
                     .replace(/bg-gray-100/g, 'bg-white/55 backdrop-blur-md')
                     .replace(/bg-white(?!\/)/g, 'bg-white/75')
-                    .replace(/hover:bg-amber-(500|600|700|800|900|950)/g, 'hover:bg-slate-900')
-                    .replace(/bg-amber-(400|500|600|700|800|900|950)/g, 'bg-slate-800/85')
+                    .replace(/hover:bg-amber-(500|600|700|800|900|950)/g, 'hover:bg-teal-800')
+                    .replace(/bg-amber-(400|500|600|700|800|900|950)/g, 'bg-teal-700/90')
                     .replace(/text-amber-(400|500|600|700|800|900|950)/g, 'text-slate-700')
                     .replace(/border-amber-(200|300|400|500|600|700)/g, 'border-slate-400/50')
                     .replace(/border-gray-200/g, 'border-white/70 shadow-sm')
-                    .replace(/focus:ring-amber-\d+/g, 'focus:ring-slate-600')
-                    .replace(/focus:border-amber-\d+/g, 'focus:border-slate-600')
-                    .replace(/bg-green-600 hover:bg-green-700( active:bg-green-800)? text-white/g, 'bg-teal-700/90 hover:bg-teal-800 text-white shadow-md backdrop-blur-sm');
+                    .replace(/focus:ring-amber-\d+/g, 'focus:ring-teal-600')
+                    .replace(/focus:border-amber-\d+/g, 'focus:border-teal-600')
+                    .replace(/bg-green-600 hover:bg-green-700( active:bg-green-800)? text-white/g, 'bg-[#4355B9] hover:bg-[#36459E] active:bg-[#2C3985] text-white shadow-md');
             }
             if (theme === 'mint')  return mint  || dark;
             if (theme === 'pink')  return pink  || dark;
@@ -1769,7 +1769,7 @@
         /* ═══════════════════════════════════════════════════
            8. КОМПОНЕНТ: НАСТРОЙКА МЕСЯЦА + РАБОЧИЕ ДНИ
         ═══════════════════════════════════════════════════ */
-        const MonthSetup = ({ monthData, profile, onUpdate, allMonths, onUpdateAllMonths, onChangeMonthKey, onPullPrevMonth, onSaveMonthCloud, onLoadMonthCloud, onClearMonth, onExportExcel, cloudStatus, userPhone, theme, showToast, showConfirm, showAlert, t }) => {
+        const MonthSetup = ({ monthData, profile, onUpdate, allMonths, onUpdateAllMonths, onChangeMonthKey, onPullPrevMonth, onSaveMonthCloud, onLoadMonthCloud, onClearMonth, onExportExcel, cloudStatus, userPhone, theme = 'expert', showToast, showConfirm, showAlert, t }) => {
 
             const year  = monthData.year;
             const month = monthData.month;
@@ -2435,15 +2435,19 @@
                 'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
                 'bg-[#C62828] text-white hover:bg-[#B71C1C]'
             );
-            const btnExportExcel = t(
-                'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white',
-                'bg-green-600 hover:bg-green-700 text-white',
-                'bg-pink-600 hover:bg-pink-700 text-white',
-                'bg-blue-600 hover:bg-blue-700 text-white',
-                'bg-teal-800 hover:bg-teal-900 text-white shadow-md border border-teal-600',
-                'bg-[#5D4037] hover:bg-[#4E342E] text-white',
-                'bg-[#C62828] hover:bg-[#B71C1C] text-white'
-            );
+            const btnExportExcel = (theme === 'expert' || theme === 'expert-dark')
+                ? 'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white shadow-md'
+                : (theme === 'pastel')
+                    ? 'bg-[#4355B9] hover:bg-[#36459E] active:bg-[#2C3985] text-white shadow-md'
+                    : t(
+                        'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white',
+                        'bg-green-600 hover:bg-green-700 text-white',
+                        'bg-pink-600 hover:bg-pink-700 text-white',
+                        'bg-blue-600 hover:bg-blue-700 text-white',
+                        'bg-teal-800 hover:bg-teal-900 text-white shadow-md border border-teal-600',
+                        'bg-[#5D4037] hover:bg-[#4E342E] text-white',
+                        'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white shadow-md'
+                    );
 
             const btnSecondary = t(
                 'bg-[#282B30] text-gray-300 hover:bg-[#32363C] border border-gray-700',
@@ -3141,6 +3145,7 @@
             cloudStatus,
             onExportExcel,
             userPhone,
+            theme = 'expert',
             showToast,
             showConfirm,
             showAlert,
@@ -3205,6 +3210,14 @@
             }
 
             /* ── Стили текущей темы оформления ── */
+            const isRedButtonTheme = theme === 'expert' || theme === 'expert-dark';
+            const alertBannerClass = isRedButtonTheme
+                ? 'bg-amber-400 text-slate-950 border border-amber-500 shadow-sm font-semibold'
+                : 'bg-red-600 text-white border border-red-700 shadow-sm font-medium';
+            const alertBannerBtnClass = isRedButtonTheme
+                ? 'bg-slate-900 text-white hover:bg-slate-800 font-bold'
+                : 'bg-white text-red-700 hover:bg-red-50 font-bold';
+
             const accentClass = t(
                 'text-[#FFB300]','text-amber-700','text-pink-600',
                 'text-blue-600','text-emerald-700','text-[#5D4037]','text-[#9A1B24]'
@@ -3245,15 +3258,19 @@
                 'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
                 'bg-[#C62828] text-white hover:bg-[#B71C1C]'
             );
-            const btnExportExcel = t(
-                'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white',
-                'bg-green-600 hover:bg-green-700 text-white',
-                'bg-pink-600 hover:bg-pink-700 text-white',
-                'bg-blue-600 hover:bg-blue-700 text-white',
-                'bg-teal-800 hover:bg-teal-900 text-white shadow-md border border-teal-600',
-                'bg-[#5D4037] hover:bg-[#4E342E] text-white',
-                'bg-[#C62828] hover:bg-[#B71C1C] text-white'
-            );
+            const btnExportExcel = (theme === 'expert' || theme === 'expert-dark')
+                ? 'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white shadow-md'
+                : (theme === 'pastel')
+                    ? 'bg-[#4355B9] hover:bg-[#36459E] active:bg-[#2C3985] text-white shadow-md'
+                    : t(
+                        'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white',
+                        'bg-green-600 hover:bg-green-700 text-white',
+                        'bg-pink-600 hover:bg-pink-700 text-white',
+                        'bg-blue-600 hover:bg-blue-700 text-white',
+                        'bg-teal-800 hover:bg-teal-900 text-white shadow-md border border-teal-600',
+                        'bg-[#5D4037] hover:bg-[#4E342E] text-white',
+                        'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white shadow-md'
+                    );
             const btnSecondary = t(
                 'bg-[#282B30] text-gray-300 hover:bg-[#32363C] border border-gray-700',
                 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300',
@@ -3320,6 +3337,50 @@
                 });
                 setDistributionMap(null);
             };
+
+            /* ── Предупреждение о крупной заправке в конце месяца и перегруженных днях ── */
+            const lateRefuelInfo = useMemo(() => {
+                const validRefuels = (monthData.refuels || []).filter(r => (Number(r.liters) || 0) > 0);
+                if (validRefuels.length === 0 || activeNorm <= 0) return null;
+
+                // Уникальные даты заправок, отсортированные хронологически
+                const refDates = [...new Set(validRefuels.map(r => r.date))].sort();
+
+                let maxNeedTarget = 0;
+                for (const refDate of refDates) {
+                    const tailRefuels = validRefuels
+                        .filter(r => r.date >= refDate)
+                        .reduce((s, r) => s + (Number(r.liters) || 0), 0);
+
+                    const tailSelectedDays = Math.max(1, selectedKeys.filter(k => k >= refDate).length);
+                    const maxSafeBurn = tailSelectedDays * 180 * activeNorm / 100;
+                    const needTarget = Math.max(0, tailRefuels - maxSafeBurn);
+
+                    if (needTarget > maxNeedTarget) {
+                        maxNeedTarget = needTarget;
+                    }
+                }
+
+                const recommendedFuel = Number((Math.ceil(maxNeedTarget * 10) / 10).toFixed(1));
+                const isTailOverloaded = activeNorm > 0 && recommendedFuel > 0 && (target < recommendedFuel - 0.05);
+
+                const hasOverloadedDayInPreview = distributionMap
+                    ? Object.entries(distributionMap).some(([k, add]) => ((Number(workdays[k]?.tripKm) || 0) + Number(add)) > 200)
+                    : false;
+
+                const isEndMonthOverloaded = isTailOverloaded || hasOverloadedDayInPreview;
+
+                if (!isEndMonthOverloaded) return null;
+
+                return {
+                    recommendedFuel,
+                    isTailOverloaded,
+                    hasOverloadedDayInPreview,
+                    isEndMonthOverloaded
+                };
+            }, [monthData.refuels, selectedKeys, activeNorm, target, distributionMap, workdays]);
+
+            const isEndMonthOverloaded = Boolean(lateRefuelInfo?.isEndMonthOverloaded);
 
             /* ── Автовыбор оптимального количества дней с учётом топлива ── */
             const handleAutoSelectDays = () => {
@@ -3523,6 +3584,7 @@
 
             /* ── Применение распределения (Страховка 1: мгновенный сброс предпросмотра) ── */
             const handleApply = () => {
+                if (isEndMonthOverloaded) return;
                 if (!distributionMap) return;
                 const mapToApply = distributionMap;
                 setDistributionMap(null);
@@ -3782,6 +3844,7 @@
 
             /* ── Генерация маршрутов-петель для пустых рабочих дней (OSRM / реальные дороги) ── */
             const handleGenerateRoutes = async () => {
+                if (isEndMonthOverloaded) return;
                 const startPoint = (profile?.startPoint || '').trim();
                 if (!startPoint) {
                     if (showToast) showToast('Укажите домашний адрес (Точку старта) во вкладке «Профиль»!', 'error');
@@ -4354,6 +4417,112 @@
                         };
                     }
 
+                    // 5. Точная целочисленная доводка diff до 0 км (при включённой подгонке пробега)
+                    if (fitRoutesToMonthlyOdometer && eligibleDayKeys.length > 0) {
+                        const targetTotalKm = goalType === 'odometer'
+                            ? Math.max(0, (Number(targetOdometer) || 0) - odometerStart)
+                            : Math.round(requiredKm);
+
+                        // Пробег дней месяца, не участвовавших в генерации (например, загруженные из Маршрутов)
+                        const fixedOtherKm = workdayKeys
+                            .filter(k => !newPreview[k])
+                            .reduce((s, k) => s + (Number(workdays[k]?.tripKm) || 0), 0);
+
+                        // Функция проверки допустимости топливного баланса для тестового набора пробегов
+                        const isFuelBalanceValid = (testWorkdaysMap) => {
+                            const sim = {};
+                            for (let d = 1; d <= totalDays; d++) {
+                                const dk = toDateStr(year, month, d);
+                                const orig = workdays[dk];
+                                const previewDay = testWorkdaysMap[dk];
+                                if (previewDay) {
+                                    sim[dk] = {
+                                        ...orig,
+                                        isWorkday: true,
+                                        tripKm: previewDay.actualKm
+                                    };
+                                } else if (orig) {
+                                    sim[dk] = {
+                                        ...orig,
+                                        isWorkday: !!orig.isWorkday,
+                                        tripKm: Number(orig.tripKm) || 0
+                                    };
+                                } else {
+                                    sim[dk] = { isWorkday: false, tripKm: 0, trips: [] };
+                                }
+                            }
+                            const check = recalcWorkdays(
+                                sim,
+                                monthData.odometerStart,
+                                monthData.fuelStart,
+                                monthData.refuels || [],
+                                activeNorm
+                            );
+                            return !Object.values(check).some(day => day.isWorkday && Number(day.fuelEnd) < -0.0001);
+                        };
+
+                        let currentGenTotal = eligibleDayKeys.reduce((s, k) => s + (Number(newPreview[k]?.actualKm) || 0), 0);
+                        let diff = Math.round(targetTotalKm - fixedOtherKm) - currentGenTotal;
+
+                        let guard = 0;
+                        while (diff !== 0 && guard < 2000) {
+                            guard++;
+                            let changed = false;
+
+                            if (diff > 0) {
+                                // Нужно добавить пробег: сортируем от меньшего пробега к большему
+                                const sortedKeys = [...eligibleDayKeys].sort((a, b) => {
+                                    return (newPreview[a]?.actualKm || 0) - (newPreview[b]?.actualKm || 0);
+                                });
+
+                                for (const dk of sortedKeys) {
+                                    const dayPreview = newPreview[dk];
+                                    if (!dayPreview) continue;
+                                    const curKm = Number(dayPreview.actualKm) || 0;
+                                    if (curKm + 1 > 210) continue; // ограничение дневного пробега
+
+                                    // Тестируем +1 км
+                                    const testMap = {
+                                        ...newPreview,
+                                        [dk]: { ...dayPreview, actualKm: curKm + 1 }
+                                    };
+
+                                    if (isFuelBalanceValid(testMap)) {
+                                        dayPreview.actualKm = curKm + 1;
+                                        if (tempWorkdays[dk]) {
+                                            tempWorkdays[dk].tripKm = curKm + 1;
+                                        }
+                                        diff -= 1;
+                                        changed = true;
+                                        break;
+                                    }
+                                }
+                            } else {
+                                // Нужно убавить пробег: выбираем дни с пробегом > 15 км от большего к меньшему
+                                const sortedKeys = [...eligibleDayKeys]
+                                    .filter(k => (newPreview[k]?.actualKm || 0) > 15)
+                                    .sort((a, b) => (newPreview[b]?.actualKm || 0) - (newPreview[a]?.actualKm || 0));
+
+                                for (const dk of sortedKeys) {
+                                    const dayPreview = newPreview[dk];
+                                    if (!dayPreview) continue;
+                                    const curKm = Number(dayPreview.actualKm) || 0;
+                                    if (curKm - 1 < 15) continue;
+
+                                    dayPreview.actualKm = curKm - 1;
+                                    if (tempWorkdays[dk]) {
+                                        tempWorkdays[dk].tripKm = curKm - 1;
+                                    }
+                                    diff += 1;
+                                    changed = true;
+                                    break;
+                                }
+                            }
+
+                            if (!changed) break;
+                        }
+                    }
+
                     // Обновляем кэш расстояний новыми вычисленными парами
                     if (Object.keys(newCacheEntries).length > 0 && onUpdateDistanceCache) {
                         Object.entries(newCacheEntries).forEach(([k, v]) => {
@@ -4392,10 +4561,11 @@
             const recMaxDays = Math.max(1, Math.floor(targetTotal / loVal));
             let rangeHint = null;
             if (targetTotal > 0 && selectedCount > 0) {
+                const recDaysText = recMinDays === recMaxDays ? `${recMinDays} дн.` : `${recMinDays}–${recMaxDays} дн.`;
                 if (targetTotal < minPossible) {
-                    rangeHint = `Выбрано много дней (${selectedCount}) для ${targetTotal} км при мин. ${loVal} км/д. Рекомендуется ${recMinDays}–${recMaxDays} дн.`;
+                    rangeHint = `Выбрано много дней (${selectedCount}) для ${targetTotal} км при мин. ${loVal} км/д. Рекомендуется ${recDaysText}`;
                 } else if (targetTotal > maxPossible) {
-                    rangeHint = `Выбрано мало дней (${selectedCount}) для ${targetTotal} км при макс. ${hiVal} км/д. Рекомендуется ${recMinDays}–${recMaxDays} дн.`;
+                    rangeHint = `Выбрано мало дней (${selectedCount}) для ${targetTotal} км при макс. ${hiVal} км/д. Рекомендуется ${recDaysText}`;
                 }
             }
 
@@ -4558,11 +4728,45 @@
 
                             {/* Предупреждение о нехватке топлива при целевом одометре */}
                             {goalType === 'odometer' && projectedFuelEnd < -0.001 && (
-                                <div className="mt-2 p-2.5 rounded text-xs bg-red-500/15 border border-red-500/40 text-red-500 flex items-center gap-2">
-                                    <IconAlertTriangle size={16} className="flex-shrink-0" />
+                                <div className={`mt-2 p-2.5 rounded-lg text-xs flex items-center gap-2 ${alertBannerClass}`}>
+                                    <IconAlertTriangle size={16} className={`flex-shrink-0 ${isRedButtonTheme ? 'text-slate-950' : 'text-white'}`} />
                                     <span>
                                         При таком конечном пробеге не хватает топлива ({formatFuel(Math.abs(projectedFuelEnd))} л) — проверьте заправки или уменьшите конечный одометр.
                                     </span>
+                                </div>
+                            )}
+
+                            {/* Предупреждение о крупной заправке в конце месяца */}
+                            {lateRefuelInfo && (
+                                <div className={`mt-3 p-3.5 rounded-lg text-xs flex items-start gap-2.5 ${alertBannerClass}`}>
+                                    <IconAlertTriangle size={18} className={`flex-shrink-0 mt-0.5 ${isRedButtonTheme ? 'text-slate-950' : 'text-white'}`} />
+                                    <div className="leading-relaxed flex-1 space-y-2">
+                                        {lateRefuelInfo.isTailOverloaded ? (
+                                            <>
+                                                <div>
+                                                    В конце месяца крупная заправка — чтобы списать её за оставшиеся дни, требуется более 190–200 км/день (маршрут не уложится в лимит). Рекомендуется указать «Целевой остаток» не менее <strong>{lateRefuelInfo.recommendedFuel} л</strong> (или выбрать больше рабочих дней в конце месяца), чтобы перенести лишнее топливо на следующий месяц.
+                                                </div>
+                                                <div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setGoalType('fuel');
+                                                            setTargetFuel(formatFuel(lateRefuelInfo.recommendedFuel));
+                                                            setDistributionMap(null);
+                                                            setRoutePreviewMap(null);
+                                                        }}
+                                                        className={`px-3 py-1 rounded shadow-sm text-xs transition-colors ${alertBannerBtnClass}`}
+                                                    >
+                                                        Подставить {lateRefuelInfo.recommendedFuel} л
+                                                    </button>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div>
+                                                В текущем разбросе есть день с пробегом более 200 км — нажмите «Пересчитать разброс» или добавьте рабочий день в календаре.
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -4734,9 +4938,9 @@
                         <div className={`rounded-lg border p-4 space-y-4 ${cardClass}`}>
                             {/* Предупреждение и кнопка расчёта загруженных маршрутов */}
                             {uncalculatedRouteDays.length > 0 && (
-                                <div className="p-3.5 rounded-lg border border-amber-500/50 bg-amber-500/10 text-amber-500 space-y-2.5">
+                                <div className={`p-3.5 rounded-lg space-y-2.5 ${alertBannerClass}`}>
                                     <div className="flex items-start gap-2 text-xs">
-                                        <IconAlertTriangle size={18} className="flex-shrink-0 mt-0.5 text-amber-500" />
+                                        <IconAlertTriangle size={18} className={`flex-shrink-0 mt-0.5 ${isRedButtonTheme ? 'text-slate-950' : 'text-white'}`} />
                                         <div>
                                             <span className="font-bold">
                                                 Есть реальные маршруты без пробега ({uncalculatedRouteDays.map(k => parseInt(k.split('-')[2], 10)).join(', ')})
@@ -4750,9 +4954,9 @@
                                         type="button"
                                         disabled={isCalculatingRouteKm}
                                         onClick={calculateExistingRoutesKm}
-                                        className={`w-full min-h-[44px] flex items-center justify-center gap-2 rounded text-xs font-bold shadow transition-all ${
-                                            isCalculatingRouteKm ? 'opacity-70 cursor-wait bg-amber-600 text-white' : btnPrimary
-                                        }`}
+                                        className={`w-full min-h-[44px] flex items-center justify-center gap-2 rounded text-xs shadow transition-all ${
+                                            isCalculatingRouteKm ? 'opacity-70 cursor-wait' : ''
+                                        } ${alertBannerBtnClass}`}
                                     >
                                         {isCalculatingRouteKm ? (
                                             <>
@@ -4861,8 +5065,8 @@
 
                             {/* Мягкая подсказка по балансу дней */}
                             {rangeHint && (
-                                <div className="p-2.5 rounded text-xs bg-amber-500/10 border border-amber-500/30 text-amber-500 flex items-center gap-2">
-                                    <IconAlertTriangle size={16} className="flex-shrink-0" />
+                                <div className={`p-2.5 rounded-lg text-xs flex items-center gap-2 ${alertBannerClass}`}>
+                                    <IconAlertTriangle size={16} className={`flex-shrink-0 ${isRedButtonTheme ? 'text-slate-950' : 'text-white'}`} />
                                     <span>{rangeHint}</span>
                                 </div>
                             )}
@@ -4935,17 +5139,54 @@
 
                                     {/* Предупреждение об отрицательном остатке в предпросмотре */}
                                     {hasNegativeFuelInPreview && (
-                                        <div className="p-2.5 rounded text-xs bg-red-500/10 border border-red-500/30 text-red-500 flex items-center gap-2">
-                                            <IconAlertTriangle size={16} className="flex-shrink-0" />
-                                            <span>⚠ Внимание: в некоторые дни остаток топлива опускается ниже нуля! Проверьте дни заправок или начальный остаток.</span>
+                                        <div className={`p-2.5 rounded-lg text-xs flex items-center gap-2 ${alertBannerClass}`}>
+                                            <IconAlertTriangle size={16} className={`flex-shrink-0 ${isRedButtonTheme ? 'text-slate-950' : 'text-white'}`} />
+                                            <span>Внимание: в некоторые дни остаток топлива опускается ниже нуля! Проверьте дни заправок или начальный остаток.</span>
+                                        </div>
+                                    )}
+
+                                    {/* Предупреждение о крупной заправке в конце месяца в предпросмотре */}
+                                    {lateRefuelInfo && (
+                                        <div className={`p-3.5 rounded-lg text-xs flex items-start gap-2.5 ${alertBannerClass}`}>
+                                            <IconAlertTriangle size={18} className={`flex-shrink-0 mt-0.5 ${isRedButtonTheme ? 'text-slate-950' : 'text-white'}`} />
+                                            <div className="leading-relaxed flex-1 space-y-2">
+                                                {lateRefuelInfo.isTailOverloaded ? (
+                                                    <>
+                                                        <div>
+                                                            В конце месяца крупная заправка — чтобы списать её за оставшиеся дни, требуется более 190–200 км/день (маршрут не уложится в лимит). Рекомендуется указать «Целевой остаток» не менее <strong>{lateRefuelInfo.recommendedFuel} л</strong> (или выбрать больше рабочих дней в конце месяца), чтобы перенести лишнее топливо на следующий месяц.
+                                                        </div>
+                                                        <div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setGoalType('fuel');
+                                                                    setTargetFuel(formatFuel(lateRefuelInfo.recommendedFuel));
+                                                                    setDistributionMap(null);
+                                                                    setRoutePreviewMap(null);
+                                                                }}
+                                                                className={`px-3 py-1 rounded shadow-sm text-xs transition-colors ${alertBannerBtnClass}`}
+                                                            >
+                                                                Подставить {lateRefuelInfo.recommendedFuel} л
+                                                            </button>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <div>
+                                                        В текущем разбросе есть день с пробегом более 200 км — нажмите «Пересчитать разброс» или добавьте рабочий день в календаре.
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
 
                                     {/* Кнопка применения к месяцу */}
                                     <button
                                         type="button"
+                                        disabled={isEndMonthOverloaded}
                                         onClick={handleApply}
-                                        className={`w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold shadow-md transition-transform active:scale-[0.99] ${btnPrimary}`}
+                                        className={`w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold shadow-md transition-transform active:scale-[0.99] ${
+                                            isEndMonthOverloaded ? 'opacity-50 cursor-not-allowed bg-gray-500 text-white' : btnPrimary
+                                        }`}
                                     >
                                         <IconCheck size={18} />
                                         Применить пробеги к месяцу ({targetTotal} км)
@@ -4979,8 +5220,10 @@
                         <button
                             type="button"
                             onClick={handleGenerateRoutes}
-                            disabled={isGeneratingRoutes}
-                            className={`w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold shadow-md transition-transform active:scale-[0.99] ${btnStepAction}`}
+                            disabled={isGeneratingRoutes || isEndMonthOverloaded}
+                            className={`w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold shadow-md transition-transform active:scale-[0.99] ${
+                                isEndMonthOverloaded ? 'opacity-50 cursor-not-allowed bg-gray-500 text-white' : btnStepAction
+                            }`}
                         >
                             <IconMapPin size={18} />
                             {isGeneratingRoutes ? (generationProgress || 'Подбираем маршруты-петли...') : '🗺 Подобрать маршруты-петли для рабочих дней'}
@@ -5036,7 +5279,7 @@
                                                 </span>
                                             </div>
                                         ) : (
-                                            <div className="p-2.5 rounded-lg text-xs flex items-center gap-2 bg-amber-500/15 border border-amber-500/30 text-amber-400 font-medium">
+                                            <div className={`p-2.5 rounded-lg text-xs flex items-center gap-2 ${alertBannerClass}`}>
                                                 <span className="flex-shrink-0">⚠️</span>
                                                 <span>
                                                     Не удалось точно определить адрес точки старта на карте — проверьте написание адреса в Карточке сотрудника
@@ -5143,8 +5386,14 @@
                     {/* Скачивание отчёта */}
                     <div className="pt-2">
                         <button
-                            onClick={() => onExportExcel && onExportExcel()}
-                            className={`w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold shadow-md transition-all ${btnExportExcel}`}
+                            disabled={isEndMonthOverloaded}
+                            onClick={() => {
+                                if (isEndMonthOverloaded) return;
+                                if (onExportExcel) onExportExcel();
+                            }}
+                            className={`w-full min-h-[48px] flex items-center justify-center gap-2 rounded-lg text-sm font-bold shadow-md transition-all ${
+                                isEndMonthOverloaded ? 'opacity-50 cursor-not-allowed bg-gray-500 text-white' : btnExportExcel
+                            }`}
                         >
                             <IconDownload size={18} />
                             Сформировать и скачать отчёт (.xlsx)
@@ -5270,8 +5519,8 @@
                         <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4">
                             {/* Ошибка wrong_pin или валидации */}
                             {displayError && (
-                                <div className="p-3 rounded-lg bg-red-500/15 border border-red-500/40 text-red-500 text-xs font-bold flex items-start gap-2 animate-fade-in">
-                                    <IconAlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+                                <div className="p-3 rounded-lg bg-red-600 text-white border border-red-700 shadow-sm text-xs font-bold flex items-start gap-2 animate-fade-in">
+                                    <IconAlertTriangle size={16} className="flex-shrink-0 mt-0.5 text-white" />
                                     <span>{displayError}</span>
                                 </div>
                             )}
@@ -5393,15 +5642,19 @@
                 'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
                 'bg-[#C62828] text-white hover:bg-[#B71C1C]'
             );
-            const btnExportExcel = t(
-                'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white',
-                'bg-green-600 hover:bg-green-700 text-white',
-                'bg-pink-600 hover:bg-pink-700 text-white',
-                'bg-blue-600 hover:bg-blue-700 text-white',
-                'bg-teal-800 hover:bg-teal-900 text-white shadow-md border border-teal-600',
-                'bg-[#5D4037] hover:bg-[#4E342E] text-white',
-                'bg-[#C62828] hover:bg-[#B71C1C] text-white'
-            );
+            const btnExportExcel = (theme === 'expert' || theme === 'expert-dark')
+                ? 'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white shadow-md'
+                : (theme === 'pastel')
+                    ? 'bg-[#4355B9] hover:bg-[#36459E] active:bg-[#2C3985] text-white shadow-md'
+                    : t(
+                        'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white',
+                        'bg-green-600 hover:bg-green-700 text-white',
+                        'bg-pink-600 hover:bg-pink-700 text-white',
+                        'bg-blue-600 hover:bg-blue-700 text-white',
+                        'bg-teal-800 hover:bg-teal-900 text-white shadow-md border border-teal-600',
+                        'bg-[#5D4037] hover:bg-[#4E342E] text-white',
+                        'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white shadow-md'
+                    );
             const rowClass = t(
                 'bg-[#1E2125] border-gray-700',
                 'bg-gray-50 border-gray-200',
@@ -6606,6 +6859,13 @@
                     /* ── 2. Лист «Расчет» ── */
                     const wsCalc = wb.getWorksheet('Расчет');
                     if (wsCalc) {
+                        const setFormulaResult = (cell, computedValue) => {
+                            if (!cell) return;
+                            if (cell.value && typeof cell.value === 'object' && (cell.value.formula || cell.value.sharedFormula)) {
+                                cell.value = { ...cell.value, result: computedValue };
+                            }
+                        };
+
                         wsCalc.getCell('J2').value = activeNorm;
                         wsCalc.getCell('F5').value = Number(mData.fuelStart) || 0;
 
@@ -6622,6 +6882,11 @@
 
                         // Одометр и заправки: только рабочие дни
                         let currentOdo = Math.round(Number(mData.odometerStart) || 0);
+                        let runningFuel = Number(mData.fuelStart) || 0;
+                        let totalKmSum = 0;
+                        let totalRefuelSum = 0;
+                        let totalSpentSum = 0;
+
                         for (let d = 1; d <= 31; d++) {
                             const row = d + 4;
                             const dateKey = toDateStr(year, month, d);
@@ -6630,9 +6895,9 @@
                             const refuelLiters = (mData.refuels || [])
                                 .filter(r => r.date === dateKey)
                                 .reduce((s, r) => s + (Number(r.liters) || 0), 0);
+                            const kmInt = isWorking ? Math.round(Number(dayObj.tripKm) || 0) : 0;
 
                             if (isWorking) {
-                                const kmInt = Math.round(Number(dayObj.tripKm) || 0);
                                 // Пропускаем дни с 0 км и без заправки — не пишем одометр
                                 if (kmInt === 0 && refuelLiters === 0) {
                                     wsCalc.getCell(`C${row}`).value = null;
@@ -6650,12 +6915,37 @@
                                 wsCalc.getCell(`G${row}`).value = null;
                             }
 
+                            // Параллельный расчёт показателей дня для обновления кэша формул
+                            const dayKm = isWorking ? kmInt : 0;
+                            const fuelAtStart = runningFuel;
+                            const dayRefuel = isWorking ? refuelLiters : 0;
+                            const daySpent = activeNorm > 0 ? Number((dayKm * activeNorm / 100).toFixed(3)) : 0;
+                            const fuelAtEnd = Number((fuelAtStart + dayRefuel - daySpent).toFixed(3));
+                            runningFuel = fuelAtEnd;
+
+                            totalKmSum += dayKm;
+                            totalRefuelSum += dayRefuel;
+                            totalSpentSum += daySpent;
+
+                            // Обновление кэша result для формульных ячеек строки
+                            setFormulaResult(wsCalc.getCell(`E${row}`), dayKm);
+                            if (row > 5) {
+                                setFormulaResult(wsCalc.getCell(`F${row}`), fuelAtStart);
+                            }
+                            setFormulaResult(wsCalc.getCell(`I${row}`), daySpent);
+                            setFormulaResult(wsCalc.getCell(`J${row}`), fuelAtEnd);
+
                             // Проверка столбца H («Заправлено наличными»): если значение 0 — оставляем ячейку пустой (null)
                             const hCell = wsCalc.getCell(`H${row}`);
                             if (hCell && (hCell.value === 0 || hCell.value === '0')) {
                                 hCell.value = null;
                             }
                         }
+
+                        // Обновление кэша result в итоговой строке 36
+                        setFormulaResult(wsCalc.getCell('E36'), totalKmSum);
+                        setFormulaResult(wsCalc.getCell('G36'), Number(totalRefuelSum.toFixed(3)));
+                        setFormulaResult(wsCalc.getCell('I36'), Number(totalSpentSum.toFixed(3)));
                     }
 
                     /* ── 3. Путевые листы «1»..«31» — маршрутные строки ── */
@@ -6870,15 +7160,19 @@
                 'bg-[#6D4C41] text-white hover:bg-[#5D4037]',
                 'bg-[#C62828] text-white hover:bg-[#B71C1C]'
             );
-            const btnExportExcel = t(
-                'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white',
-                'bg-green-600 hover:bg-green-700 text-white',
-                'bg-pink-600 hover:bg-pink-700 text-white',
-                'bg-blue-600 hover:bg-blue-700 text-white',
-                'bg-teal-800 hover:bg-teal-900 text-white shadow-md border border-teal-600',
-                'bg-[#5D4037] hover:bg-[#4E342E] text-white',
-                'bg-[#C62828] hover:bg-[#B71C1C] text-white'
-            );
+            const btnExportExcel = (theme === 'expert' || theme === 'expert-dark')
+                ? 'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white shadow-md'
+                : (theme === 'pastel')
+                    ? 'bg-[#4355B9] hover:bg-[#36459E] active:bg-[#2C3985] text-white shadow-md'
+                    : t(
+                        'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white',
+                        'bg-green-600 hover:bg-green-700 text-white',
+                        'bg-pink-600 hover:bg-pink-700 text-white',
+                        'bg-blue-600 hover:bg-blue-700 text-white',
+                        'bg-teal-800 hover:bg-teal-900 text-white shadow-md border border-teal-600',
+                        'bg-[#5D4037] hover:bg-[#4E342E] text-white',
+                        'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white shadow-md'
+                    );
 
             const modeSwitchBase = 'flex rounded-full border overflow-hidden text-xs font-bold ' + t(
                 'border-[#FFB300]/40','border-amber-400','border-pink-400',
@@ -7187,6 +7481,7 @@
                                     cloudStatus={cloudStatus}
                                     onExportExcel={() => exportReportToExcel(profile, currentMonthData)}
                                     userPhone={userPhone}
+                                    theme={theme}
                                     showToast={showToast}
                                     showConfirm={showConfirm}
                                     showAlert={showAlert}
