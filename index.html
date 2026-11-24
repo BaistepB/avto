@@ -3354,18 +3354,21 @@
                         .filter(r => r.date >= refDate)
                         .reduce((s, r) => s + (Number(r.liters) || 0), 0);
 
-                    const tailSelectedDays = Math.max(1, selectedKeys.filter(k => k >= refDate).length);
-                    // Комфортный расход (180 км/день) для расчёта recommendedFuel
-                    const maxSafeBurn = tailSelectedDays * 180 * activeNorm / 100;
+                    const refDay = parseInt(refDate.split('-')[2], 10) || 1;
+                    // Считаем ВСЕ оставшиеся календарные дни месяца до конца, а не только уже кликнутые дни
+                    const calendarDaysLeft = Math.max(1, totalDays - refDay + 1);
+
+                    // Комфортный расход (180 км/день) для расчёта recommendedFuel от оставшихся календарных дней
+                    const maxSafeBurn = calendarDaysLeft * 180 * activeNorm / 100;
                     const needTarget = Math.max(0, tailRefuels - maxSafeBurn);
 
                     if (needTarget > maxNeedTarget) {
                         maxNeedTarget = needTarget;
                     }
 
-                    // Жёсткая перегрузка хвоста месяца: если даже при предельном экстремуме 280 км/день топливо не сжечь
-                    const maxExtremeBurn = tailSelectedDays * 280 * activeNorm / 100;
-                    if (tailRefuels - maxExtremeBurn > target + 0.05) {
+                    // Жёсткая перегрузка хвоста месяца: только если ДАЖЕ ПО ВСЕМ календарным дням при 280 км/день топливо физически не сжечь
+                    const maxPossibleBurn = calendarDaysLeft * 280 * activeNorm / 100;
+                    if (tailRefuels - maxPossibleBurn > target + 0.05) {
                         isTailOverloaded = true;
                     }
                 }
@@ -3386,7 +3389,7 @@
                     hasOverloadedDayInPreview,
                     isEndMonthOverloaded
                 };
-            }, [monthData.refuels, selectedKeys, activeNorm, target, distributionMap, workdays]);
+            }, [monthData.refuels, totalDays, activeNorm, target, distributionMap, workdays]);
 
             const isEndMonthOverloaded = Boolean(lateRefuelInfo?.isEndMonthOverloaded);
 
@@ -4627,12 +4630,20 @@
             const recMinDays = Math.max(1, Math.ceil(targetTotal / hiVal));
             const recMaxDays = Math.max(1, Math.floor(targetTotal / loVal));
             let rangeHint = null;
+            let isRangeHintCritical = false;
             if (targetTotal > 0 && selectedCount > 0) {
                 const recDaysText = recMinDays === recMaxDays ? `${recMinDays} дн.` : `${recMinDays}–${recMaxDays} дн.`;
-                if (targetTotal < minPossible) {
-                    rangeHint = `Выбрано много дней (${selectedCount}) для ${targetTotal} км при мин. ${loVal} км/д. Рекомендуется ${recDaysText}`;
+                if (selectedCount * 280 < targetTotal) {
+                    // Реальная критическая нехватка: даже при 280 км/день пробег физически не помещается
+                    isRangeHintCritical = true;
+                    rangeHint = `Выбрано слишком мало дней (${selectedCount}) для ${targetTotal} км — выберите больше дней в календаре (рекомендуется ${recDaysText}).`;
                 } else if (targetTotal > maxPossible) {
-                    rangeHint = `Выбрано мало дней (${selectedCount}) для ${targetTotal} км при макс. ${hiVal} км/д. Рекомендуется ${recDaysText}`;
+                    // В 280 км/д помещается, но превышает обычный лимит maxKm: мягкая информационная подсказка
+                    isRangeHintCritical = false;
+                    rangeHint = `При ${selectedCount} дн. часть дней превысит обычный лимит ${hiVal} км/д (до 280 км/д). Для комфортного пробега рекомендуется ${recDaysText}.`;
+                } else if (targetTotal < minPossible) {
+                    isRangeHintCritical = false;
+                    rangeHint = `Выбрано много дней (${selectedCount}) для ${targetTotal} км при мин. ${loVal} км/д. Рекомендуется ${recDaysText}.`;
                 }
             }
 
@@ -5115,7 +5126,10 @@
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs opacity-60 mb-1">Макс. км в день</label>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label className="block text-xs opacity-60">Макс. км в день (обычный)</label>
+                                        <span className="text-[10px] opacity-40 font-mono">резерв до 280 км</span>
+                                    </div>
                                     <input
                                         type="number"
                                         min="10"
@@ -5129,11 +5143,20 @@
                                     />
                                 </div>
                             </div>
+                            <p className="text-[11px] opacity-50 -mt-2">
+                                ℹ В крайних случаях (для точной доводки или при нехватке дней) алгоритм может расширить лимит до 280 км/день.
+                            </p>
 
                             {/* Мягкая подсказка по балансу дней */}
                             {rangeHint && (
-                                <div className={`p-2.5 rounded-lg text-xs flex items-center gap-2 ${alertBannerClass}`}>
-                                    <IconAlertTriangle size={16} className={`flex-shrink-0 ${isRedButtonTheme ? 'text-slate-950' : 'text-white'}`} />
+                                <div className={`p-2.5 rounded-lg text-xs flex items-center gap-2 ${
+                                    isRangeHintCritical
+                                        ? alertBannerClass
+                                        : 'bg-slate-500/10 border border-slate-500/30 text-slate-700 dark:text-slate-300 font-medium'
+                                }`}>
+                                    <IconAlertTriangle size={16} className={`flex-shrink-0 ${
+                                        isRangeHintCritical ? (isRedButtonTheme ? 'text-slate-950' : 'text-white') : 'text-amber-500'
+                                    }`} />
                                     <span>{rangeHint}</span>
                                 </div>
                             )}
