@@ -3347,25 +3347,33 @@
                 const refDates = [...new Set(validRefuels.map(r => r.date))].sort();
 
                 let maxNeedTarget = 0;
+                let isTailOverloaded = false;
+
                 for (const refDate of refDates) {
                     const tailRefuels = validRefuels
                         .filter(r => r.date >= refDate)
                         .reduce((s, r) => s + (Number(r.liters) || 0), 0);
 
                     const tailSelectedDays = Math.max(1, selectedKeys.filter(k => k >= refDate).length);
+                    // Комфортный расход (180 км/день) для расчёта recommendedFuel
                     const maxSafeBurn = tailSelectedDays * 180 * activeNorm / 100;
                     const needTarget = Math.max(0, tailRefuels - maxSafeBurn);
 
                     if (needTarget > maxNeedTarget) {
                         maxNeedTarget = needTarget;
                     }
+
+                    // Жёсткая перегрузка хвоста месяца: если даже при предельном экстремуме 280 км/день топливо не сжечь
+                    const maxExtremeBurn = tailSelectedDays * 280 * activeNorm / 100;
+                    if (tailRefuels - maxExtremeBurn > target + 0.05) {
+                        isTailOverloaded = true;
+                    }
                 }
 
                 const recommendedFuel = Number((Math.ceil(maxNeedTarget * 10) / 10).toFixed(1));
-                const isTailOverloaded = activeNorm > 0 && recommendedFuel > 0 && (target < recommendedFuel - 0.05);
 
                 const hasOverloadedDayInPreview = distributionMap
-                    ? Object.entries(distributionMap).some(([k, add]) => ((Number(workdays[k]?.tripKm) || 0) + Number(add)) > 200)
+                    ? Object.entries(distributionMap).some(([k, add]) => ((Number(workdays[k]?.tripKm) || 0) + Number(add)) > 280)
                     : false;
 
                 const isEndMonthOverloaded = isTailOverloaded || hasOverloadedDayInPreview;
@@ -3496,7 +3504,9 @@
                     );
 
                     const curBaseKm = Number(workdays[k]?.tripKm) || 0;
-                    const maxAddable = Math.max(0, safeCapKm - curBaseKm);
+                    // Мягкий потолок первого прохода: не более 200 км общего дневного пробега
+                    const softLimitAddable = Math.max(0, 200 - curBaseKm);
+                    const maxAddable = Math.max(0, Math.min(softLimitAddable, safeCapKm - curBaseKm));
                     const give = Math.min(desiredKm, maxAddable, unallocated);
                     alloc[k] = give;
                     unallocated -= give;
@@ -3510,11 +3520,15 @@
                 let currentSum = Object.values(alloc).reduce((a, b) => a + b, 0);
                 let delta = targetTotal - currentSum;
 
+                // Двухуровневое распределение delta:
+                // Уровень 1: обычный мягкий потолок 200 км/день
+                // Уровень 2 (крайний случай): резервный максимум до 280 км/день
                 let loopSafety = 0;
                 while (delta !== 0 && loopSafety < 10000) {
                     loopSafety++;
                     if (delta > 0) {
-                        const eligible = [];
+                        // 1-й проход: ищем дни, где пробег < 200 км
+                        let eligible = [];
                         for (const k of selectedKeys) {
                             const safeCap = getMaxSafeKmForDay(
                                 simWorkdays,
@@ -3526,11 +3540,33 @@
                             );
                             const curBaseKm = Number(workdays[k]?.tripKm) || 0;
                             const curTotalKm = curBaseKm + (alloc[k] || 0);
-                            if (curTotalKm + 1 <= safeCap) {
+                            if (curTotalKm + 1 <= 200 && curTotalKm + 1 <= safeCap) {
                                 eligible.push(k);
                             }
                         }
+
+                        // 2-й проход (крайний случай): если дни < 200 км исчерпаны, разрешаем до 280 км
+                        if (eligible.length === 0) {
+                            for (const k of selectedKeys) {
+                                const safeCap = getMaxSafeKmForDay(
+                                    simWorkdays,
+                                    k,
+                                    monthData.refuels,
+                                    monthData.fuelStart,
+                                    activeNorm,
+                                    0.2
+                                );
+                                const curBaseKm = Number(workdays[k]?.tripKm) || 0;
+                                const curTotalKm = curBaseKm + (alloc[k] || 0);
+                                if (curTotalKm + 1 <= 280 && curTotalKm + 1 <= safeCap) {
+                                    eligible.push(k);
+                                }
+                            }
+                        }
+
                         if (eligible.length === 0) break; // топливный бак физически исчерпан
+
+                        // Приоритет отдаём дням с меньшим превышением или предпочтительно меньше hi
                         const preferred = eligible.filter(k => alloc[k] < hi);
                         const pool = preferred.length > 0 ? preferred : eligible;
                         const chosen = pool[Math.floor(Math.random() * pool.length)];
@@ -4143,15 +4179,19 @@
                         // Ограничение переноса невязки: не более ±20% от планового километража дня
                         const maxDeltaAllowed = Math.round(plannedDayKm * 0.20 * 10) / 10;
                         const clampedDelta = Math.max(-maxDeltaAllowed, Math.min(maxDeltaAllowed, carryDelta));
+                        // Двухуровневый потолок targetKmForDay:
+                        // Если плановый день уже превышает 200 км (крайний случай распределения) — разрешаем до 280 км, иначе держим в комфортных 190–200 км
+                        const targetLimitMax = plannedDayKm > 200 ? 280 : 190;
                         const targetKmForDay = fitRoutesToMonthlyOdometer
-                            ? Math.min(190, Math.max(20, Math.round((plannedDayKm + clampedDelta) * 10) / 10))
+                            ? Math.min(targetLimitMax, Math.max(20, Math.round((plannedDayKm + clampedDelta) * 10) / 10))
                             : plannedDayKm;
 
                         // dayCapKm: не более 115% от цели, не более safeCapKm, не более остатка бюджета месяца
                         const dayCapKm = Math.min(
                             Math.round(targetKmForDay * 1.15),
                             safeCapKm,
-                            Math.max(20, remainingMonthBudgetKm)
+                            Math.max(20, remainingMonthBudgetKm),
+                            280
                         );
 
                         // Включение заезда в офис/склад строго по заранее распределённым дням (максимум 2 раза за весь месяц)
@@ -4475,11 +4515,12 @@
                                     return (newPreview[a]?.actualKm || 0) - (newPreview[b]?.actualKm || 0);
                                 });
 
+                                // Проход 1 (обычный): добавляем +1 км только в дни, где текущий пробег < 200 км
                                 for (const dk of sortedKeys) {
                                     const dayPreview = newPreview[dk];
                                     if (!dayPreview) continue;
                                     const curKm = Number(dayPreview.actualKm) || 0;
-                                    if (curKm + 1 > 210) continue; // ограничение дневного пробега
+                                    if (curKm + 1 > 200) continue; // обычный потолок 200 км
 
                                     // Тестируем +1 км
                                     const testMap = {
@@ -4495,6 +4536,32 @@
                                         diff -= 1;
                                         changed = true;
                                         break;
+                                    }
+                                }
+
+                                // Проход 2 (крайний случай): если дни < 200 км исчерпаны/недоступны, разрешаем до 280 км
+                                if (!changed) {
+                                    for (const dk of sortedKeys) {
+                                        const dayPreview = newPreview[dk];
+                                        if (!dayPreview) continue;
+                                        const curKm = Number(dayPreview.actualKm) || 0;
+                                        if (curKm + 1 > 280) continue; // резервный максимум 280 км
+
+                                        // Тестируем +1 км
+                                        const testMap = {
+                                            ...newPreview,
+                                            [dk]: { ...dayPreview, actualKm: curKm + 1 }
+                                        };
+
+                                        if (isFuelBalanceValid(testMap)) {
+                                            dayPreview.actualKm = curKm + 1;
+                                            if (tempWorkdays[dk]) {
+                                                tempWorkdays[dk].tripKm = curKm + 1;
+                                            }
+                                            diff -= 1;
+                                            changed = true;
+                                            break;
+                                        }
                                     }
                                 }
                             } else {
@@ -4744,7 +4811,7 @@
                                         {lateRefuelInfo.isTailOverloaded ? (
                                             <>
                                                 <div>
-                                                    В конце месяца крупная заправка — чтобы списать её за оставшиеся дни, требуется более 190–200 км/день (маршрут не уложится в лимит). Рекомендуется указать «Целевой остаток» не менее <strong>{lateRefuelInfo.recommendedFuel} л</strong> (или выбрать больше рабочих дней в конце месяца), чтобы перенести лишнее топливо на следующий месяц.
+                                                    В конце месяца крупная заправка — чтобы списать её за оставшиеся дни, требуется более 280 км/день (маршрут физически не уложится в допустимый пробег). Рекомендуется указать «Целевой остаток» не менее <strong>{lateRefuelInfo.recommendedFuel} л</strong> (или выбрать больше рабочих дней в конце месяца), чтобы перенести лишнее топливо на следующий месяц.
                                                 </div>
                                                 <div>
                                                     <button
@@ -4763,7 +4830,7 @@
                                             </>
                                         ) : (
                                             <div>
-                                                В текущем разбросе есть день с пробегом более 200 км — нажмите «Пересчитать разброс» или добавьте рабочий день в календаре.
+                                                В текущем разбросе есть день с пробегом более 280 км — нажмите «Пересчитать разброс» или добавьте рабочий день в календаре.
                                             </div>
                                         )}
                                     </div>
